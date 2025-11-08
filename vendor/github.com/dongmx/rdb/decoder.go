@@ -127,10 +127,11 @@ const (
 	TypeHashZiplist     ValueType = 13
 	TypeListQuicklist   ValueType = 14
 	TypeStreamListPacks ValueType = 15
+	Type7List           ValueType = 18
 )
 
 const (
-	rdbVersion  = 9
+	rdbVersion  = 20
 	rdb6bitLen  = 0
 	rdb14bitLen = 1
 	rdb32bitLen = 0x80

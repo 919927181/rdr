@@ -1,9 +1,30 @@
 RDR: redis data reveal
 =================================================
 
+## About（用途）
 RDR(redis data reveal) is a tool to parse redis rdbfile. Comparing to [redis-rdb-tools](https://github.com/sripathikrishnan/redis-rdb-tools), RDR is implemented by golang, much faster (5GB rdbfile takes about 2mins on my PC).
 
-## Usage
+RDR(redis data Reveal)是一个解析redis rdb文件的工具，通过redis内存分析，找出bigkey、找出日益无限制增长的key。
+
+与redis-rdb-tools相比，RDR是由golang实现的，速度更快。
+
+本源码fok自github.com/caiqing0204/rdr，他fok自github.com/xueqiu/rdr，在此对开源作者表示感谢。
+
+注：请阅读我的帖子 [《redis内存离线分析工具选型》](https://mp.weixin.qq.com/s/h7YJd0dVui0FqJLkG8RXxQ)
+
+
+问题：rdr格式在解析list格式有问题，list的元素个数是个超大数字（可能溢出），用HDT3213/rdb验证了下，没有解析出list中的数据
+解决：可以尝试通过 RedisShake 数据迁移工具，将redis7 RDB数据迁移到redis6下，然后再用rdr\进行分析。
+
+
+## change（变更）
+- caiqing0204：在源代码基础上，增加了key所属DB，这样可以更直观的查看key元信息。
+- 泰山李工：
+   - 将依赖 github.com/dongmx/rdb 中的rdbVersion 由9改成20【2025-11-08】
+   - 修改html布局、将标题英文改为中文 【2025-11-08】
+
+
+## Usage（变更）
 
 ```
 NAME:
@@ -52,8 +73,33 @@ USAGE:
 
 After downloading maybe need add permisson to execute.
 
+
 ```
-$ chmod a+x ./rdr*
+
+1）在windows 下打包，编译出 linux 下的可执行文件，在项目根目录下，打开cmd，执行以下命令
+    set GOOS=linux
+    set GOARCH=amd64
+    go build -o rdr-linux  main.go
+
+2）创建目录
+# mkdir -p /tmp/redisdb/
+# cd /tmp/redisdb/
+
+3）然后把rdr工具、redis的数据库文件.rdb上传到该目录下
+
+给工具赋予执行权限
+# chmod a+x ./rdr*
+
+4）运行
+# ./rdr-linux show -p 8099 *.rdb
+
+5）防火墙端口放行
+     For Ubuntu\Debian：sudo ufw allow 8099/tcp  &&  sudo ufw reload
+     For Redhat\Centos：
+          sudo firewall-cmd --zone=public --add-port=8099/tcp --permanent
+           sudo firewall-cmd --reload
+		   
+6）查看分析结果，浏览器访问 http://yourip：8099/
 ```
 
 ## Exapmle
@@ -74,6 +120,22 @@ portfolio:stock_follower_count:ZH951803
 portfolio:stock_follower:ZH924804
 portfolio:stock_follower_count:INS104806
 ```
+
+## develop (开发）
+
+1. 如果你需要修改依赖，请将依赖fok到自己仓库下，然后源码引用自己的地址
+   或 直接修改下载下来的依赖项目的源码
+
+2. 如果你需要修改html
+
+    你需要安装go-bindata，安装手册可参考 https://blog.csdn.net/qq_67017602/article/details/130742316
+
+3. 运行
+ go generate
+ 如果改动了静态资源，需要使用go-bindata将静态资源文件嵌入到go文件里
+ //go-bindata -prefix "static/" -o=static/static.go -pkg=static -ignore static.go static/...
+ //go-bindata -prefix "views/" -o=views/views.go -pkg=views -ignore views.go views/...
+
 
 ## License
 

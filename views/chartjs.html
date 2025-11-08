@@ -47,7 +47,7 @@
                 display: true,
                 fontColor: "#000",
                 fontSize: 13,
-                text: 'key number by types'
+                text: '各类型key的数量'
             },
             elements: {
                 center: {
@@ -64,9 +64,9 @@
         var rawPieConfig = JSON.stringify(pieConfig);
         var pieConfig0 = JSON.parse(rawPieConfig);
         var pieConfig1 = JSON.parse(rawPieConfig);
-        pieConfig0.options.title.text = "key number by type";
+        pieConfig0.options.title.text = "各类型key的数量";
         pieConfig0.options.elements.center.text = {{humanizeComma .TotleNum}}
-        pieConfig1.options.title.text = "memory used by type (byte)";
+        pieConfig1.options.title.text = "各类型key内存占用情况(byte)";
         pieConfig1.options.elements.center.text = {{humanizeBytes .TotleBytes}}
 
         {{range $type, $num := .TypeNum}}
