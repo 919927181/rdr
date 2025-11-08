@@ -24,7 +24,7 @@ RDR(redis data Reveal)是一个解析redis rdb文件的工具，通过redis内�
    - 修改html布局、将标题英文改为中文 【2025-11-08】
 
 
-## Usage（变更）
+## Usage（使用）
 
 ```
 NAME:
@@ -65,17 +65,7 @@ USAGE:
    rdr keys FILE1 [FILE2] [FILE3]...
 ```
 
-[Linux amd64 Download](https://github.com/xueqiu/rdr/releases/download/v0.0.1/rdr-linux)
-
-[OSX Download](https://github.com/xueqiu/rdr/releases/download/v0.0.1/rdr-darwin)
-
-[Windows Download](https://github.com/xueqiu/rdr/releases/download/v0.0.1/rdr-windows.exe)
-
-After downloading maybe need add permisson to execute.
-
-
 ```
-
 1）在windows 下打包，编译出 linux 下的可执行文件，在项目根目录下，打开cmd，执行以下命令
     set GOOS=linux
     set GOARCH=amd64
@@ -131,11 +121,18 @@ portfolio:stock_follower_count:INS104806
     你需要安装go-bindata，安装手册可参考 https://blog.csdn.net/qq_67017602/article/details/130742316
 
 3. 运行
+   
+```
  go generate
- 如果改动了静态资源，需要使用go-bindata将静态资源文件嵌入到go文件里
- //go-bindata -prefix "static/" -o=static/static.go -pkg=static -ignore static.go static/...
- //go-bindata -prefix "views/" -o=views/views.go -pkg=views -ignore views.go views/...
 
+ 如果改动了静态资源，需要使用go-bindata将静态资源文件嵌入到go文件里
+
+ //go-bindata -prefix "static/" -o=static/static.go -pkg=static -ignore static.go static/...
+ 
+ //go-bindata -prefix "views/" -o=views/views.go -pkg=views -ignore views.go views/...
+ ```
+
+4. 构建，输出linu下的可执行文件【见上面】
 
 ## License
 
