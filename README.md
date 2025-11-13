@@ -23,9 +23,14 @@ RDR(redis data reveal) is a tool to parse redis rdbfile. Comparing to [redis-rdb
    - v1.0.2
      - 将依赖 github.com/dongmx/rdb 中的rdbVersion 由9改成20【2025-11-08】
      - 修改html布局、将标题英文改为中文 【2025-11-08】
+	 
    - v1.0.3 
      - 升级chartjs版本，实现图表tip时，显示更人性化的数字【2025-11-13】
-
+     - 将2021年3月 至 2023年7月，在原作者 github.com/xueqiu/rdr/pulls，除过滤小key外的其他pulls，均同步过来、并解决完毕。
+	 - 遗留问题： redis3.2+新引入的encoding为quicklist作为list的基础类型，list的元素个数是个超大数字，在分析时可能溢出
+	 
+   - v2.0.0
+     - 待更新
 
 ## Usage（使用）
 
