@@ -4,9 +4,9 @@ RDR: redis data reveal
 ## About（用途）
 RDR(redis data reveal) is a tool to parse redis rdbfile. Comparing to [redis-rdb-tools](https://github.com/sripathikrishnan/redis-rdb-tools), RDR is implemented by golang, much faster (5GB rdbfile takes about 2mins on my PC).
 
-RDR(redis data Reveal)是一个解析redis rdb文件的工具，通过redis内存分析，找出bigkey、找出日益无限制增长的key。
+ - RDR(redis data Reveal)是一个解析redis rdb文件的工具，通过redis内存分析，找出bigkey、找出日益无限制增长的key。
 
-与redis-rdb-tools相比，RDR是由golang实现的，速度更快。
+ - 与redis-rdb-tools相比，RDR是由golang实现的，速度更快。
 
 本源码fok自github.com/caiqing0204/rdr，他fok自github.com/xueqiu/rdr，在此对开源作者表示感谢。
 
@@ -20,8 +20,11 @@ RDR(redis data Reveal)是一个解析redis rdb文件的工具，通过redis内�
 ## change（变更）
 - caiqing0204：在源代码基础上，增加了key所属DB，这样可以更直观的查看key元信息。
 - 泰山李工：
-   - 将依赖 github.com/dongmx/rdb 中的rdbVersion 由9改成20【2025-11-08】
-   - 修改html布局、将标题英文改为中文 【2025-11-08】
+   - v1.0.2
+     - 将依赖 github.com/dongmx/rdb 中的rdbVersion 由9改成20【2025-11-08】
+     - 修改html布局、将标题英文改为中文 【2025-11-08】
+   - v1.0.3 
+     - 升级chartjs版本，实现图表tip时，显示更人性化的数字【2025-11-13】
 
 
 ## Usage（使用）

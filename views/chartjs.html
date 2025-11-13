@@ -160,8 +160,8 @@
         //var pieConfig1 = JSON.parse(rawPieConfig);
 
         //给环形图中间的自定义文字赋值
-        pieConfig0.options.plugins.customCenterText.text = "总 "+{{humanizeComma .TotleNum}}
-        pieConfig1.options.plugins.customCenterText.text = "总 "+{{humanizeBytes .TotleBytes}}
+        pieConfig0.options.plugins.customCenterText.text = "总 "+{{humanizeComma .TotalNum}}
+        pieConfig1.options.plugins.customCenterText.text = "总 "+{{humanizeBytes .TotalBytes}}
 
 
         {{range $type, $num := .TypeNum}}

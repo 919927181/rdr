@@ -96,7 +96,7 @@ func (c *Counter) GetLargestEntries(num int) []*decoder.Entry {
 	return res
 }
 
-//GetLargestKeyPrefixes from heap
+// GetLargestKeyPrefixes from heap
 func (c *Counter) GetLargestKeyPrefixes() []*PrefixEntry {
 	res := []*PrefixEntry{}
 

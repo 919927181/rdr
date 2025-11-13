@@ -41,9 +41,9 @@ type Decoder struct {
 
 	usedMem int64
 	ctime   int64
-	count   int
-	rdbVer  int
-	Db      int
+	//count   int
+	rdbVer int //rdb file version
+	Db     int
 
 	currentInfo  *rdb.Info
 	currentEntry *Entry
@@ -199,7 +199,7 @@ func (d *Decoder) Hset(key, field, value []byte) {
 		e.Bytes += d.m.SizeofString(value)
 		e.Bytes += d.m.HashtableEntryOverhead()
 
-		if d.rdbVer < 8 {
+		if d.rdbVer < 16 {
 			e.Bytes += 2 * d.m.RobjOverhead()
 		}
 	}
@@ -229,7 +229,7 @@ func (d *Decoder) Sadd(key, member []byte) {
 		e.Bytes += d.m.SizeofString(member)
 		e.Bytes += d.m.HashtableEntryOverhead()
 
-		if d.rdbVer < 8 {
+		if d.rdbVer < 16 {
 			e.Bytes += d.m.RobjOverhead()
 		}
 	}
@@ -283,7 +283,7 @@ func (d *Decoder) Rpush(key, value []byte) {
 		e.Bytes += d.m.LinkedListEntryOverhead()
 		e.Bytes += sizeInlist
 
-		if d.rdbVer < 8 {
+		if d.rdbVer < 16 {
 			e.Bytes += d.m.RobjOverhead()
 		}
 
@@ -359,7 +359,7 @@ func (d *Decoder) Zadd(key []byte, score float64, member []byte) {
 		e.Bytes += d.m.SizeofString(member)
 		e.Bytes += d.m.SkiplistEntryOverhead()
 
-		if d.rdbVer < 8 {
+		if d.rdbVer < 16 {
 			e.Bytes += d.m.RobjOverhead()
 		}
 	}

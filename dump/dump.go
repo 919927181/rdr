@@ -32,7 +32,7 @@ func Dump(path string) (map[string]interface{}, error) {
 	cnt := NewCounter()
 	cnt.Count(decoder.Entries)
 	filename := filepath.Base(path)
-	data = getData(filename, cnt)
+	data = GetData(filename, cnt)
 	return data, nil
 }
 
@@ -43,22 +43,22 @@ func ToCliWriter(cli *cli.Context) {
 		return
 	}
 
-	// parse rdbfile
+	// parse rdb file
 	fmt.Fprintln(cli.App.Writer, "[")
-	nargs := cli.NArg()
-	for i := 0; i < nargs; i++ {
+	nArgs := cli.NArg()
+	for i := 0; i < nArgs; i++ {
 		file := cli.Args().Get(i)
-		decoder := decoder.NewDecoder()
-		go Decode(cli, decoder, file)
+		rdbDecoder := decoder.NewDecoder()
+		go Decode(cli, rdbDecoder, file)
 		cnt := NewCounter()
-		cnt.Count(decoder.Entries)
+		cnt.Count(rdbDecoder.Entries)
 		filename := filepath.Base(file)
-		data := getData(filename, cnt)
-		data["MemoryUse"] = decoder.GetUsedMem()
-		data["CTime"] = decoder.GetTimestamp()
+		data := GetData(filename, cnt)
+		data["MemoryUse"] = rdbDecoder.GetUsedMem()
+		data["CTime"] = rdbDecoder.GetTimestamp()
 		jsonBytes, _ := json.MarshalIndent(data, "", "    ")
 		fmt.Fprint(cli.App.Writer, string(jsonBytes))
-		if i == nargs-1 {
+		if i == nArgs-1 {
 			fmt.Fprintln(cli.App.Writer)
 		} else {
 			fmt.Fprintln(cli.App.Writer, ",")
@@ -83,7 +83,7 @@ func Decode(c *cli.Context, decoder *decoder.Decoder, filepath string) {
 	}
 }
 
-func getData(filename string, cnt *Counter) map[string]interface{} {
+func GetData(filename string, cnt *Counter) map[string]interface{} {
 	data := make(map[string]interface{})
 	data["CurrentInstance"] = filename
 	data["LargestKeys"] = cnt.GetLargestEntries(100)
@@ -108,8 +108,8 @@ func getData(filename string, cnt *Counter) map[string]interface{} {
 	for _, v := range cnt.typeBytes {
 		totalBytes += v
 	}
-	data["TotleNum"] = totalNum
-	data["TotleBytes"] = totalBytes
+	data["TotalNum"] = totalNum
+	data["TotalBytes"] = totalBytes
 
 	lenLevelCount := map[string][]*PrefixEntry{}
 	for _, entry := range cnt.GetLenLevelCount() {
