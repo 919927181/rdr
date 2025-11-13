@@ -123,13 +123,16 @@ portfolio:stock_follower_count:INS104806
 3. 运行
    
 ```
- go generate
 
- 如果改动了静态资源，需要使用go-bindata将静态资源文件嵌入到go文件里
+ 1.如果改动了静态资源（css\js\html），需要使用go-bindata将静态资源文件嵌入到go文件里
 
  //go-bindata -prefix "static/" -o=static/static.go -pkg=static -ignore static.go static/...
  
  //go-bindata -prefix "views/" -o=views/views.go -pkg=views -ignore views.go views/...
+ 
+ 2. 作用是在编译前自动化生成某类代码;它常用于自动生成代码
+ 
+ go generate
  ```
 
 4. 构建，输出linu下的可执行文件【见上面】
