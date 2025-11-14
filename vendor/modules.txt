@@ -6,9 +6,9 @@ github.com/919927181/rdb/nopdecoder
 github.com/cpuguy83/go-md2man/v2/md2man
 # github.com/davecgh/go-spew v1.1.0
 github.com/davecgh/go-spew/spew
-# github.com/dongmx/rdb v0.0.0-20200714074246-e1191ecb6823
-github.com/dongmx/rdb
-github.com/dongmx/rdb/crc64
+# github.com/919927181/rdb v0.0.0-20200714074246-e1191ecb6823
+github.com/919927181/rdb
+github.com/919927181/rdb/crc64
 # github.com/dustin/go-humanize v1.0.0
 github.com/dustin/go-humanize
 # github.com/elazarl/go-bindata-assetfs v1.0.1
