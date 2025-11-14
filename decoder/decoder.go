@@ -19,8 +19,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/dongmx/rdb"
-	"github.com/dongmx/rdb/nopdecoder"
+	"github.com/919927181/rdb"
+	"github.com/919927181/rdb/nopdecoder"
 )
 
 // Entry is info of a redis recored

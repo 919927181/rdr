@@ -18,8 +18,8 @@ import (
 	"container/heap"
 	"testing"
 
+	"github.com/919927181/rdr/decoder"
 	"github.com/stretchr/testify/assert"
-	"github.com/xueqiu/rdr/decoder"
 )
 
 func TestGetLargestKeyPrefixes(t *testing.T) {
@@ -41,7 +41,7 @@ func TestGetLargestKeyPrefixes(t *testing.T) {
 
 func TestSlotHeap(t *testing.T) {
 	var test slotHeap
-	                    //0  1  2  3  4  5  6
+	//0  1  2  3  4  5  6
 	toBeSorts := []uint64{5, 7, 9, 6, 3, 1, 2}
 	expectedSlot := []int{2, 1, 3, 0, 4, 6, 5}
 

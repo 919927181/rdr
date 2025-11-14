@@ -10,11 +10,11 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/919927181/rdr/decoder"
+	"github.com/919927181/rdr/static"
 	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/julienschmidt/httprouter"
 	"github.com/urfave/cli"
-	"github.com/xueqiu/rdr/decoder"
-	"github.com/xueqiu/rdr/static"
 )
 
 var counters = NewSafeMap()

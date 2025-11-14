@@ -23,8 +23,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/919927181/rdr/views"
 	"github.com/dustin/go-humanize"
-	"github.com/xueqiu/rdr/views"
 )
 
 var (
