@@ -1,23 +1,43 @@
 RDR: redis data reveal
 =================================================
 
-## About（用途）
-RDR(redis data reveal) is a tool to parse redis rdbfile. Comparing to [redis-rdb-tools](https://github.com/sripathikrishnan/redis-rdb-tools), RDR is implemented by golang, much faster (5GB rdbfile takes about 2mins on my PC).
+## About（介绍）
 
- - RDR(redis data Reveal)是一个解析redis rdb文件的工具，通过redis内存分析，找出bigkey、找出日益无限制增长的key。
+RDR(redis data reveal) is a tool to parse redis rdbfile.  Through redis memory analysis, it helps us find bigkeys and keys that are growing without limit.
 
- - 与redis-rdb-tools相比，RDR是由golang实现的，速度更快。
+This repository is fok  from github.com/xueqiu/rdr.  The requrie rdb file parse is github.com/dongmx/rdb ，now in this repository  has been replaced  github.com/919927181/rdb
 
-本源码fok自github.com/caiqing0204/rdr，他fok自github.com/xueqiu/rdr，在此对开源作者表示感谢。
+- RDR(redis data Reveal)是一个用于离线解析 redis rdb 文件的工具，通过redis内存分析，帮助我们找出bigkey、日益无限制增长的key等。
+
+- 本项目fok自github.com/caiqing0204/rdr <--fok from--xueqiu/rdr，该工具依赖 dongmx/rdb 来解析redis rdb 文件。在此，对以上开源作者，以及提供灵感、pr的朋友们表示感谢。
+
+-  与redis-rdb-tools相比，RDR是由golang实现的，速度更快。
 
 注：请阅读我的帖子 [《redis内存离线分析工具选型》](https://mp.weixin.qq.com/s/h7YJd0dVui0FqJLkG8RXxQ)
 
 
-问题：rdr格式在解析list格式有问题，list的元素个数是个超大数字（可能溢出），用HDT3213/rdb验证了下，没有解析出list中的数据
-解决：可以尝试通过 RedisShake 数据迁移工具，将redis7 RDB数据迁移到redis6下，然后再用rdr\进行分析。
+## Applicable Redis Version（适用 redis 版本）
+
+ - RDR V1. 适用于 Redis6 版本 （redis 5.x ~ 6.x ，rdb 的版本则是 9 。）
+  
+ - Redis 7.0 以上版本（rdb 的版本是 10 +），如果本工具出错：
+ 
+  - 可以尝试通过 RedisShake 数据迁移工具，将redis7 RDB数据迁移到redis6下，然后再用rdr\进行分析。
+  - 可以使用 golang版本的工具：github.com/HDT3213/rdb  -->  github.com/919927181/rdr-guigo-Wails【桌面GUI程序】 
 
 
-## change（变更）
+备注：
+
+  - 已知问题： list的元素个数是个超大数字（可能溢出）。
+
+  - 本工具的核心依赖是 rdb 文件解析，不同版本的 redis，其 rdb 文件存在差异，也会增加新的数据类型，存在数据兼容性问题。
+
+  - RDR 判断 redis rdb 版本的涉及两个文件：
+   - \decoder\decoder.go 中的 'if d.rdbVer <' 我已改成小于16
+   - 依赖\vendor\github.com\919927181\rdb\decoder.go 中的变量rdbVersion,我已改成20。
+
+
+## Change（变更）
 - caiqing0204：在源代码基础上，增加了key所属DB，这样可以更直观的查看key元信息。
 - 泰山李工：
    - v1.0.2
@@ -29,9 +49,9 @@ RDR(redis data reveal) is a tool to parse redis rdbfile. Comparing to [redis-rdb
      - 将2021年3月 至 2023年7月，在原作者 github.com/xueqiu/rdr/pulls，除过滤小key外的其他pulls，均同步过来、并解决完毕。
 	 - 遗留问题： redis3.2+新引入的encoding为quicklist作为list的基础类型，list的元素个数是个超大数字，在分析时可能溢出
 	 
-   结束：
-     - github.com/dongmx/rdb  该redis 数据文件离线分析项目多年不维护了，个人精力有限，因此转向使用比较活跃的github.com/hdt3213/rdb
-	 - 即将创建新开源项目rdr2，敬请期待。
+
+备注：github.com/dongmx/rdb  该项目已无维护。本着不重复造轮子的思想，将创建一个基于github.com/hdt3213/rdb的redis 离线内存分析工具 rdr2 【待创建】。
+
 
 ## Usage（使用）
 
@@ -120,12 +140,28 @@ portfolio:stock_follower:ZH924804
 portfolio:stock_follower_count:INS104806
 ```
 
-## develop (开发）
+## develop (rdr 开发）
 
-1. 如果你需要修改依赖，请将依赖fok到自己仓库下，然后源码引用自己的地址
-   或 直接修改下载下来的依赖项目的源码
+1. 文件目录结构
 
-2. 如果你需要修改html
+```
+\decoder\
+   |-- decoder.go       # 调用直接依赖github.com/919927181/rdb的方法，读取rdb数据
+   |-- memprofiler.go  # 内存分析器
+\dump\
+   |-- dump.go  # 转储rdb文件统计信息
+\static  # 以html展示结果时，需要的静态资源文件
+\views  # html 前端页面代码
+
+```
+
+
+2. 如果你想修改redis rdb 文件解析插件的源码，可以pr到github.com/919927181/rdb
+
+   你可以直接修改下载到本地的依赖 \vendor\github.com\919927181\rdb，调试成功后，再进行pr 或创建\并引用自己的rdb依赖
+
+
+3. 如果你需要修改html
 
     你需要安装go-bindata，安装手册可参考 https://blog.csdn.net/qq_67017602/article/details/130742316
 
@@ -144,7 +180,18 @@ portfolio:stock_follower_count:INS104806
  go generate
  ```
 
+
+
 4. 构建，输出linu下的可执行文件【见上面】
+
+
+## develop  （rdb 文件解析开发）
+
+大部分 rdb 文件的解析应该都是按照下面这个文档来的：https://github.com/sripathikrishnan/redis-rdb-tools/wiki/Redis-RDB-Dump-File-Format
+
+作为开发者，可以对照 redis 源码里面的 rdb.c 这个文件：https://github.com/redis/redis/blob/7.0-rc3/src/rdb.c
+
+注：rdb 对数字这一块的解码操作要特别注意，不一定能用 BitConverter.ToIntXX 来获得正确的值！！
 
 ## License
 

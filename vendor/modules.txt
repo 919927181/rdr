@@ -1,4 +1,4 @@
-# github.com/919927181/rdb v1.0.2
+# github.com/919927181/rdb v1.0.3
 github.com/919927181/rdb
 github.com/919927181/rdb/crc64
 github.com/919927181/rdb/nopdecoder

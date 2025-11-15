@@ -97,7 +97,7 @@ func asideHtml() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "aside.html", size: 732, mode: os.FileMode(438), modTime: time.Unix(1627872266, 0)}
+	info := bindataFileInfo{name: "aside.html", size: 732, mode: os.FileMode(438), modTime: time.Unix(1763180613, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -117,7 +117,7 @@ func baseHtml() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "base.html", size: 2185, mode: os.FileMode(438), modTime: time.Unix(1763005800, 0)}
+	info := bindataFileInfo{name: "base.html", size: 2185, mode: os.FileMode(438), modTime: time.Unix(1763180613, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -137,7 +137,7 @@ func chartjsHtml() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "chartjs.html", size: 10045, mode: os.FileMode(438), modTime: time.Unix(1763015735, 0)}
+	info := bindataFileInfo{name: "chartjs.html", size: 10045, mode: os.FileMode(438), modTime: time.Unix(1763180613, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -157,7 +157,7 @@ func footerHtml() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "footer.html", size: 117, mode: os.FileMode(438), modTime: time.Unix(1762941884, 0)}
+	info := bindataFileInfo{name: "footer.html", size: 117, mode: os.FileMode(438), modTime: time.Unix(1763180613, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -177,7 +177,7 @@ func headerHtml() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "header.html", size: 1240, mode: os.FileMode(438), modTime: time.Unix(1627872266, 0)}
+	info := bindataFileInfo{name: "header.html", size: 1240, mode: os.FileMode(438), modTime: time.Unix(1763180613, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -197,7 +197,7 @@ func revelHtml() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "revel.html", size: 7603, mode: os.FileMode(438), modTime: time.Unix(1762931336, 0)}
+	info := bindataFileInfo{name: "revel.html", size: 7603, mode: os.FileMode(438), modTime: time.Unix(1763180613, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }

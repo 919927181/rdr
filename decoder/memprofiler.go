@@ -75,10 +75,10 @@ func (m *MemProfiler) mallocOverhead(size uint64) uint64 {
 // Each top level object is an entry in a dictionary, and so we have to include
 // the overhead of a dictionary entry
 func (m *MemProfiler) TopLevelObjOverhead(key []byte, expiry int64) uint64 {
-	return m.HashtableEntryOverhead() + m.SizeofString(key) + m.RobjOverhead() + m.KeyExpiryOverhead(expiry)
+	return m.HashTableEntryOverHead() + m.SizeofString(key) + m.RobjOverHead() + m.KeyExpiryOverhead(expiry)
 }
 
-// HashtableOverhead get memory use of a hashtable
+// HashTableOverhead get memory use of a hashtable
 // See  https://github.com/antirez/redis/blob/unstable/src/dict.h
 // See the structures dict and dictht
 // 2 * (3 unsigned longs + 1 pointer) + int + long + 2 pointers
@@ -89,7 +89,7 @@ func (m *MemProfiler) TopLevelObjOverhead(key []byte, expiry int64) uint64 {
 // Due to the possibility of rehashing during loading, we calculate the worse
 // case in which both tables are allocated, and so multiply
 // the size of **table by 1.5
-func (m *MemProfiler) HashtableOverhead(size uint64) uint64 {
+func (m *MemProfiler) HashTableOverHead(size uint64) uint64 {
 	return 4 + 7*longSize + 4*pointerSize + nextPower(size)*pointerSize*3/2
 }
 
@@ -115,7 +115,7 @@ func (m *MemProfiler) StreamNACK(length uint64) uint64 {
 	return length * (pointerSize + 8 + 8)
 }
 
-// HashtableEntryOverhead get memory use of hashtable entry
+// HashTableEntryOverHead get memory use of hashtable entry
 // See  https://github.com/antirez/redis/blob/unstable/src/dict.h
 // Each dictEntry has 3 pointers
 //
@@ -129,45 +129,45 @@ func (m *MemProfiler) StreamNACK(length uint64) uint64 {
 //	    } v;
 //	    struct dictEntry *next;
 //	} dictEntry;
-func (m *MemProfiler) HashtableEntryOverhead() uint64 {
+func (m *MemProfiler) HashTableEntryOverHead() uint64 {
 	return 3 * pointerSize
 }
 
-// LinkedlistOverhead get memory use of a linked list
+// LinkedListOverHead get memory use of a linked list
 // See https://github.com/antirez/redis/blob/unstable/src/adlist.h
 // A list has 5 pointers + an unsigned long
-func (m *MemProfiler) LinkedlistOverhead() uint64 {
+func (m *MemProfiler) LinkedListOverHead() uint64 {
 	return longSize + 5*pointerSize
 }
 
-// LinkedListEntryOverhead get memory use of a linked list entry
+// LinkedListEntryOverHead get memory use of a linked list entry
 // See https://github.com/antirez/redis/blob/unstable/src/adlist.h
 // A node has 3 pointers
-func (m *MemProfiler) LinkedListEntryOverhead() uint64 {
+func (m *MemProfiler) LinkedListEntryOverHead() uint64 {
 	return 3 * pointerSize
 }
 
-// SkiplistOverhead get memory use of a skiplist
-func (m *MemProfiler) SkiplistOverhead(size uint64) uint64 {
-	return 2*pointerSize + m.HashtableOverhead(size) + (2*pointerSize + 16)
+// SkipListOverHead get memory use of a skiplist
+func (m *MemProfiler) SkipListOverHead(size uint64) uint64 {
+	return 2*pointerSize + m.HashTableOverHead(size) + (2*pointerSize + 16)
 }
 
-// SkiplistEntryOverhead get memory use of a skiplist entry
-func (m *MemProfiler) SkiplistEntryOverhead() uint64 {
-	return m.HashtableEntryOverhead() + 2*pointerSize + 8 + (pointerSize+8)*zsetRandLevel()
+// SkipListEntryOverHead get memory use of a skiplist entry
+func (m *MemProfiler) SkipListEntryOverHead() uint64 {
+	return m.HashTableEntryOverHead() + 2*pointerSize + 8 + (pointerSize+8)*zsetRandLevel()
 }
 
-func (m *MemProfiler) QuicklistOverhead(size uint64) uint64 {
+func (m *MemProfiler) QuickListOverHead(size uint64) uint64 {
 	quicklist := 2*pointerSize + 8 + 2*4
 	quickitem := 4*pointerSize + 8 + 2*4
 	return quicklist + size*quickitem
 }
 
-func (m *MemProfiler) ZiplistHeaderOverhead() uint64 {
+func (m *MemProfiler) ZipListHeaderOverHead() uint64 {
 	return 4 + 4 + 2 + 1
 }
 
-func (m *MemProfiler) ZiplistEntryOverhead(value []byte) uint64 {
+func (m *MemProfiler) ZipListEntryOverHead(value []byte) uint64 {
 	header := 0
 	size := 0
 
@@ -213,10 +213,10 @@ func (m *MemProfiler) KeyExpiryOverhead(expiry int64) uint64 {
 	if expiry <= 0 {
 		return 0
 	}
-	return m.HashtableEntryOverhead() + 8
+	return m.HashTableEntryOverHead() + 8
 }
 
-// RobjOverhead get memory useage of a robj
+// RobjOverHead get memory useage of a robj
 //
 //	typedef struct redisobject {
 //	    unsigned type:4;
@@ -227,7 +227,7 @@ func (m *MemProfiler) KeyExpiryOverhead(expiry int64) uint64 {
 //	} robj;
 const LRU_BITS = 24
 
-func (m *MemProfiler) RobjOverhead() uint64 {
+func (m *MemProfiler) RobjOverHead() uint64 {
 	return pointerSize + 4 + 4 + LRU_BITS + 4
 }
 

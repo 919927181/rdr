@@ -169,7 +169,7 @@ func (d *Decoder) StartHash(key []byte, length, expiry int64, info *rdb.Info) {
 	if info.SizeOfValue > 0 {
 		bytes += uint64(info.SizeOfValue)
 	} else if info.Encoding == "hashtable" {
-		bytes += d.m.HashtableOverhead(uint64(length))
+		bytes += d.m.HashTableOverHead(uint64(length))
 	} else {
 		panic(fmt.Sprintf("unexpected size(0) or encoding:%s", info.Encoding))
 	}
@@ -197,10 +197,10 @@ func (d *Decoder) Hset(key, field, value []byte) {
 	if d.currentInfo.Encoding == "hashtable" {
 		e.Bytes += d.m.SizeofString(field)
 		e.Bytes += d.m.SizeofString(value)
-		e.Bytes += d.m.HashtableEntryOverhead()
+		e.Bytes += d.m.HashTableEntryOverHead()
 
 		if d.rdbVer < 16 {
-			e.Bytes += 2 * d.m.RobjOverhead()
+			e.Bytes += 2 * d.m.RobjOverHead()
 		}
 	}
 }
@@ -227,10 +227,10 @@ func (d *Decoder) Sadd(key, member []byte) {
 
 	if d.currentInfo.Encoding == "hashtable" {
 		e.Bytes += d.m.SizeofString(member)
-		e.Bytes += d.m.HashtableEntryOverhead()
+		e.Bytes += d.m.HashTableEntryOverHead()
 
 		if d.rdbVer < 16 {
-			e.Bytes += d.m.RobjOverhead()
+			e.Bytes += d.m.RobjOverHead()
 		}
 	}
 }
@@ -251,7 +251,7 @@ func (d *Decoder) StartList(key []byte, length, expiry int64, info *rdb.Info) {
 	bytes := d.m.TopLevelObjOverhead(key, expiry)
 
 	//bug here length would be -1 if it is quicklist
-	//bytes += d.m.RobjOverhead() * uint64(length)
+	//bytes += d.m.RobjOverHead() * uint64(length)
 	d.currentEntry = &Entry{
 		Key:       keyStr,
 		Bytes:     bytes,
@@ -269,10 +269,10 @@ func (d *Decoder) Rpush(key, value []byte) {
 
 	switch d.currentInfo.Encoding {
 	case "quicklist":
-		e.Bytes += d.m.ZiplistEntryOverhead(value)
+		e.Bytes += d.m.ZipListEntryOverHead(value)
 
 	case "ziplist":
-		e.Bytes += d.m.ZiplistEntryOverhead(value)
+		e.Bytes += d.m.ZipListEntryOverHead(value)
 
 	case "linkedlist":
 		sizeInlist := uint64(0)
@@ -280,11 +280,11 @@ func (d *Decoder) Rpush(key, value []byte) {
 			sizeInlist = d.m.SizeofString(value)
 		}
 
-		e.Bytes += d.m.LinkedListEntryOverhead()
+		e.Bytes += d.m.LinkedListEntryOverHead()
 		e.Bytes += sizeInlist
 
 		if d.rdbVer < 16 {
-			e.Bytes += d.m.RobjOverhead()
+			e.Bytes += d.m.RobjOverHead()
 		}
 
 	default:
@@ -304,14 +304,14 @@ func (d *Decoder) EndList(key []byte) {
 
 	switch d.currentInfo.Encoding {
 	case "quicklist":
-		e.Bytes += d.m.QuicklistOverhead(d.currentInfo.Zips)
-		e.Bytes += d.m.ZiplistHeaderOverhead() * d.currentInfo.Zips
+		e.Bytes += d.m.QuickListOverHead(d.currentInfo.Zips)
+		e.Bytes += d.m.ZipListHeaderOverHead() * d.currentInfo.Zips
 
 	case "ziplist":
-		e.Bytes += d.m.ZiplistHeaderOverhead()
+		e.Bytes += d.m.ZipListHeaderOverHead()
 
 	case "linkedlist":
-		e.Bytes += d.m.LinkedlistOverhead()
+		e.Bytes += d.m.LinkedListOverHead()
 
 	default:
 		panic(fmt.Sprintf("unknown encoding:%s", d.currentInfo.Encoding))
@@ -331,7 +331,7 @@ func (d *Decoder) StartZSet(key []byte, cardinality, expiry int64, info *rdb.Inf
 	if info.SizeOfValue > 0 {
 		bytes += uint64(info.SizeOfValue)
 	} else if info.Encoding == "skiplist" {
-		bytes += d.m.SkiplistOverhead(uint64(cardinality))
+		bytes += d.m.SkipListOverHead(uint64(cardinality))
 	} else {
 		panic(fmt.Sprintf("unexpected size(0) or encoding:%s", info.Encoding))
 	}
@@ -357,10 +357,10 @@ func (d *Decoder) Zadd(key []byte, score float64, member []byte) {
 	if d.currentInfo.Encoding == "skiplist" {
 		e.Bytes += 8 // sizeof(score)
 		e.Bytes += d.m.SizeofString(member)
-		e.Bytes += d.m.SkiplistEntryOverhead()
+		e.Bytes += d.m.SkipListEntryOverHead()
 
 		if d.rdbVer < 16 {
-			e.Bytes += d.m.RobjOverhead()
+			e.Bytes += d.m.RobjOverHead()
 		}
 	}
 }
