@@ -18,23 +18,19 @@ This repository is fok  from github.com/xueqiu/rdr.  The requrie rdb file parse 
 
 ## Applicable Redis Version（适用 redis 版本）
 
- - RDR V1. 适用于 Redis6 版本 （redis 5.x ~ 6.x ，rdb 的版本则是 9 。）
-  
+ - RDR V1. 适用于 Redis6 版本 （redis 5.x ~ 6.x ，rdb 的版本则是 9 。
  - Redis 7.0 以上版本（rdb 的版本是 10 +），如果本工具出错：
  
-  - 可以尝试通过 RedisShake 数据迁移工具，将redis7 RDB数据迁移到redis6下，然后再用rdr\进行分析。
-  - 可以使用 golang版本的工具：github.com/HDT3213/rdb  -->  github.com/919927181/rdr-guigo-Wails【桌面GUI程序】 
-
+   - 可以尝试通过 RedisShake 数据迁移工具，将redis7 RDB数据迁移到redis6下，然后再用rdr\进行分析。
+   - 可以使用 golang版本的工具：github.com/HDT3213/rdb  -->  github.com/919927181/rdr-guigo-Wails【桌面GUI程序】 
 
 备注：
 
   - 已知问题： list的元素个数是个超大数字（可能溢出）。
-
   - 本工具的核心依赖是 rdb 文件解析，不同版本的 redis，其 rdb 文件存在差异，也会增加新的数据类型，存在数据兼容性问题。
-
   - RDR 判断 redis rdb 版本的涉及两个文件：
-   - \decoder\decoder.go 中的 'if d.rdbVer <' 我已改成小于16
-   - 依赖\vendor\github.com\919927181\rdb\decoder.go 中的变量rdbVersion,我已改成20。
+    - \decoder\decoder.go 中的 'if d.rdbVer <' 我已改成小于16
+    - 依赖\vendor\github.com\919927181\rdb\decoder.go 中的变量rdbVersion,我已改成20。
 
 
 ## Change（变更）
@@ -168,7 +164,6 @@ portfolio:stock_follower_count:INS104806
 3. 运行
    
 ```
-
  1.如果改动了静态资源（css\js\html），需要使用go-bindata将静态资源文件嵌入到go文件里
 
  //go-bindata -prefix "static/" -o=static/static.go -pkg=static -ignore static.go static/...
