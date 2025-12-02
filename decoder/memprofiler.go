@@ -163,6 +163,27 @@ func (m *MemProfiler) QuickListOverHead(size uint64) uint64 {
 	return quicklist + size*quickitem
 }
 
+// get memory use of a Quicklist2 参考 github.com/hdt3213/rdb/memprofiler
+/*func (m *MemProfiler) sizeOfQuicklist2(values [][]byte, detail *model.Quicklist2Detail) uint64 {
+	size := 2*pointerSize + 2*8 + 2*4
+	// https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/quicklist.h#L60
+	nodeOverhead := 3*pointerSize + 8 + 4
+	size += nodeOverhead * len(detail.NodeEncodings)
+	for i, enc := range detail.NodeEncodings {
+		if enc == model.QuicklistNodeContainerPlain {
+			size += sizeOfString(unsafeBytes2Str(values[i]))
+		} else {
+			// listpack overhead: <total_bytes><size>...<end>
+			size += 4 + 2 + 1
+			for _, s := range detail.ListPackEntrySize[i] {
+				size += int(s)
+			}
+		}
+	}
+	return size
+}*/
+
+
 func (m *MemProfiler) ZipListHeaderOverHead() uint64 {
 	return 4 + 4 + 2 + 1
 }

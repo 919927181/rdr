@@ -287,6 +287,9 @@ func (d *Decoder) Rpush(key, value []byte) {
 			e.Bytes += d.m.RobjOverHead()
 		}
 
+	case "quicklist2":
+		e.Bytes += 0  //临时不计算内存使用情况。后期写计算方法时可参考 github.com/hdt3213/rdb/memprofiler
+		
 	default:
 		panic(fmt.Sprintf("unknown encoding:%s", d.currentInfo.Encoding))
 	}
@@ -312,6 +315,9 @@ func (d *Decoder) EndList(key []byte) {
 
 	case "linkedlist":
 		e.Bytes += d.m.LinkedListOverHead()
+
+	case "quicklist2":
+		e.Bytes += 0   //临时不计算内存使用情况。后期写计算方法时可参考 github.com/hdt3213/rdb/memprofiler
 
 	default:
 		panic(fmt.Sprintf("unknown encoding:%s", d.currentInfo.Encoding))

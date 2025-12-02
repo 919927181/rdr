@@ -9,7 +9,6 @@ import (
 	"io"
 	"math"
 	"strconv"
-	"unsafe"
 
 	"github.com/919927181/rdb/core/structure"
 	"github.com/919927181/rdb/core/types"
@@ -427,7 +426,7 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
 		Freq: d.lfuFreq,
 	}
 	// 调试
-	fmt.Printf("object type %d for key %s\n", typ, string(key))
+	//fmt.Printf("object type %d for key %s\n", typ, string(key))
 
 	switch typ {
 	case TypeString:
@@ -472,26 +471,30 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
 			return errors.Trace(err)
 		}
 		d.info.Encoding = "quicklist2"
-		//size := int(structure.ReadLength(rd))
+		d.info.Zips = length
+		d.event.StartList(key, int64(-1), expiry, d.info)
 		for i := 0; i < int(length); i++ {
-			//container := structure.ReadLength(rd)
-			container, _, _ := d.readLength()
+			container, _, err2 := d.readLength()
+			if err2 != nil {
+				return errors.Trace(err)
+			}
 			if int(container) == quickListNodeContainerPlain {
 				value, err := d.readString()
 				if err != nil {
 					return errors.Trace(err)
 				}
 				d.event.Rpush(key, value)
-			} else if int(container) == quickListNodeContainerPacked {
-				listPackElements := structure.ReadListpack(d.r)
-				for _, value := range listPackElements {
-					d.event.Rpush(key, StringToBytes(value))
+			} else if int(container) == quickListNodeContainerPacked {	
+				listPackElements := structure.ReadListpack(d.r)	
+				for _, value2 := range listPackElements {
+					bytes := []byte(value2)
+					d.event.Rpush(key, bytes)
 				}
 			} else {
 				log.Panicf("unknown quicklist container %d", container)
 			}
 		}
-		d.event.EndSet(key)
+		d.event.EndList(key)
 	case TypeSet:
 		cardinality, _, err := d.readLength()
 		if err != nil {
@@ -578,16 +581,6 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
 		return fmt.Errorf("rdb: unknown object type %d for key %s", typ, key)
 	}
 	return nil
-}
-
-// string 转 byte
-func StringToBytes(s string) []byte {
-	return *(*[]byte)(unsafe.Pointer(
-		&struct {
-			string
-			Cap int
-		}{s, len(s)},
-	))
 }
 
 func (d *decode) readModule(key []byte, expiry int64) error {

@@ -1,3 +1,6 @@
 rdr
 .idea
 /rdr-linux
+/vendor/github.com/919927181/rdb/go.mod
+/vendor/github.com/919927181/rdb
+/vendor/github.com/919927181/rdb/*.mod
