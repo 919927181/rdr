@@ -9,8 +9,12 @@ import (
 	"io"
 	"math"
 	"strconv"
+	"unsafe"
 
+	"github.com/919927181/rdb/core/structure"
+	"github.com/919927181/rdb/core/types"
 	"github.com/919927181/rdb/crc64"
+	"github.com/919927181/rdb/internal/log"
 	"github.com/juju/errors"
 )
 
@@ -102,10 +106,27 @@ type Decoder interface {
 	EndRDB()
 }
 
+// 验证rdb文件的合法性
+func verifyDump(d []byte) error {
+	if len(d) < 10 {
+		return fmt.Errorf("rdb: invalid dump length")
+	}
+	version := binary.LittleEndian.Uint16(d[len(d)-10:])
+	if version > uint16(rdbVersion) {
+		return fmt.Errorf("rdb: invalid version %d, expecting %d", version, rdbVersion)
+	}
+
+	if binary.LittleEndian.Uint64(d[len(d)-8:]) != crc64.Digest(d[:len(d)-8]) {
+		return fmt.Errorf("rdb: invalid CRC checksum")
+	}
+
+	return nil
+}
+
 // Decode parses a RDB file from r and calls the decode hooks on d.
 func Decode(r io.Reader, d Decoder) error {
 	decoder := &decode{d, make([]byte, 8), bufio.NewReader(r), 0, 0, nil, 0}
-	return decoder.decode()
+	return decoder.decode()  //传指针，用指针作为receiver
 }
 
 // DecodeDump a byte slice from the Redis DUMP command. The dump does not contain the
@@ -148,24 +169,40 @@ type decode struct {
 // ValueType of redis type
 type ValueType byte
 
-// type value
+// types value
 const (
-	TypeString  ValueType = 0
+	TypeString  ValueType = 0 // RDB_TYPE_STRING
 	TypeList    ValueType = 1
 	TypeSet     ValueType = 2
 	TypeZSet    ValueType = 3
-	TypeHash    ValueType = 4
-	TypeZSet2   ValueType = 5
-	TypeModule  ValueType = 6
-	TypeModule2 ValueType = 7
+	TypeHash    ValueType = 4 // RDB_TYPE_HASH
+	TypeZSet2   ValueType = 5 // ZSET version 2 with doubles stored in binary.
+	TypeModule  ValueType = 6 // RDB_TYPE_MODULE
+	TypeModule2 ValueType = 7 // RDB_TYPE_MODULE2 Module value with annotations for parsing without the generating module being loaded.
 
-	TypeHashZipmap      ValueType = 9
-	TypeListZiplist     ValueType = 10
-	TypeSetIntset       ValueType = 11
-	TypeZSetZiplist     ValueType = 12
-	TypeHashZiplist     ValueType = 13
-	TypeListQuicklist   ValueType = 14
-	TypeStreamListPacks ValueType = 15
+	// Object types for encoded objects.
+	TypeHashZipMap      ValueType = 9
+	TypeListZipList     ValueType = 10
+	TypeSetIntSet       ValueType = 11
+	TypeZSetZipList     ValueType = 12
+	TypeHashZipList     ValueType = 13
+	TypeListQuickList   ValueType = 14 // RDB_TYPE_LIST_QUICKLIST
+	TypeStreamListPacks ValueType = 15 // RDB_TYPE_STREAM_LISTPACKS
+
+	//rdb v2.0.0 The following are added
+	TypeHashListPack     ValueType = 16 // RDB_TYPE_HASH_ZIPLIST ,Redis7.0开始使用listpack替代了ziplist，
+	TypeZSetListPack	 ValueType = 17 // RDB_TYPE_ZSET_LISTPACK
+	TypeListQuickList2   ValueType = 18 // DB_TYPE_LIST_QUICKLIST_2 https://github.com/redis/redis/pull/9357
+	TypeStreamListPacks2 ValueType = 19 // RDB_TYPE_STREAM_LISTPACKS2
+	TypeSetListPack      ValueType = 20 // RDB_TYPE_SET_LISTPACK
+	TypeStreamListPacks3 ValueType = 21 // RDB_TYPE_STREAM_LISTPACKS_3
+
+	// https://github.com/redis/redis/pull/13391
+	TypeHashMetadataPreGa ValueType = 22 // RDB_TYPE_HASH_METADATA_PRE_GA
+	TypeHashListPackExPre ValueType = 23 // RDB_TYPE_HASH_LISTPACK_EX_PRE_GA
+	TypeHashMetaData      ValueType = 24 // RDB_TYPE_HASH_METADATA
+	TypeHashListPackEx    ValueType = 25 // RDB_TYPE_HASH_LISTPACK_EX
+
 )
 
 const (
@@ -177,22 +214,28 @@ const (
 	rdbEncVal   = 3
 	rdbLenErr   = math.MaxUint64
 
-	rdbOpCodeModuleAux = 247
-	rdbOpCodeIdle      = 248
-	rdbOpCodeFreq      = 249
-	rdbOpCodeAux       = 250
-	rdbOpCodeResizeDB  = 251
-	rdbOpCodeExpiryMS  = 252
-	rdbOpCodeExpiry    = 253
-	rdbOpCodeSelectDB  = 254
-	rdbOpCodeEOF       = 255
+	kFlagSlotInfo      = 244 // (Redis 7.4) RDB_OPCODE_SLOT_INFO: slot info
+	kFlagFunction2     = 245 // RDB_OPCODE_FUNCTION2: function library data
+	kFlagFunction      = 246 // RDB_OPCODE_FUNCTION_PRE_GA: old function library data for 7.0 rc1 and rc2
+	rdbOpCodeModuleAux = 247 // RDB_OPCODE_MODULE_AUX: Module auxiliary data.
+	rdbOpCodeIdle      = 248 // RDB_OPCODE_IDLE: LRU idle time.
+	rdbOpCodeFreq      = 249 // RDB_OPCODE_FREQ: LFU frequency.
+	rdbOpCodeAux       = 250 // RDB_OPCODE_AUX: RDB aux field.
+	rdbOpCodeResizeDB  = 251 // RDB_OPCODE_RESIZEDB: Hash table resize hint.
+	rdbOpCodeExpiryMS  = 252 // RDB_OPCODE_EXPIRETIME_MS: Expire time in milliseconds.
+	rdbOpCodeExpiry    = 253 // RDB_OPCODE_EXPIRETIME: Old expire time in seconds.
+	rdbOpCodeSelectDB  = 254 // RDB_OPCODE_SELECTDB: DB number of the following keys.
+	rdbOpCodeEOF       = 255 // RDB_OPCODE_EOF: End of the RDB file.
 
-	rdbModuleOpCodeEOF    = 0
-	rdbModuleOpCodeSint   = 1
-	rdbModuleOpCodeUint   = 2
-	rdbModuleOpCodeFloat  = 3
-	rdbModuleOpCodeDouble = 4
-	rdbModuleOpCodeString = 5
+	//rdb v2.0.0 add
+	moduleTypeNameCharSet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
+	rdbModuleOpCodeEOF    = 0 // RDB_MODULE_OPCODE_EOF: End of module value.
+	rdbModuleOpCodeSint   = 1 // RDB_MODULE_OPCODE_SINT: Signed integer.
+	rdbModuleOpCodeUint   = 2 // RDB_MODULE_OPCODE_UINT: Unsigned integer.
+	rdbModuleOpCodeFloat  = 3 // RDB_MODULE_OPCODE_FLOAT: Float.
+	rdbModuleOpCodeDouble = 4 // RDB_MODULE_OPCODE_DOUBLE: Double.
+	rdbModuleOpCodeString = 5 // RDB_MODULE_OPCODE_STRING: String.
 
 	rdbLoadNone  = 0
 	rdbLoadEnc   = (1 << 0)
@@ -256,6 +299,14 @@ const (
 	rdbLpEOF = 0xFF
 )
 
+// quicklist node container formats
+const (
+	quickListNodeContainerPlain  = 1 // QUICKLIST_NODE_CONTAINER_PLAIN
+	quickListNodeContainerPacked = 2 // QUICKLIST_NODE_CONTAINER_PACKED
+)
+
+// 解码，得到objType，根据objType来执行相应的解码动作
+// 读取key和属性d.readObject(key, ValueType(objType), expiry)
 func (d *decode) decode() error {
 	err := d.checkHeader()
 	if err != nil {
@@ -330,7 +381,28 @@ func (d *decode) decode() error {
 			d.event.EndRDB()
 			return nil
 		case rdbOpCodeModuleAux:
-			return errors.Errorf("unsupport module")
+			//return errors.Errorf("unsupport module")
+			moduleId := structure.ReadLength(d.r) // module id
+			moduleName := types.ModuleTypeNameByID(moduleId)
+			log.Debugf("RDB module aux: module_id=[%d], module_name=[%s]", moduleId, moduleName)
+			_ = structure.ReadLength(d.r) // when_opcode
+			_ = structure.ReadLength(d.r) // when
+			opcode := structure.ReadLength(d.r)
+			for opcode != rdbModuleOpCodeEOF {
+				switch opcode {
+				case rdbModuleOpCodeSint, rdbModuleOpCodeUint:
+					_ = structure.ReadLength(d.r)
+				case rdbModuleOpCodeFloat:
+					_ = structure.ReadFloat(d.r)
+				case rdbModuleOpCodeDouble:
+					_ = structure.ReadDouble(d.r)
+				case rdbModuleOpCodeString:
+					_ = structure.ReadString(d.r)
+				default:
+					log.Panicf("module aux opcode not found. module_name=[%s], opcode=[%d]", moduleName, opcode)
+				}
+				opcode = structure.ReadLength(d.r)
+			}
 		default:
 			key, err := d.readString()
 			if err != nil {
@@ -348,11 +420,15 @@ func (d *decode) decode() error {
 
 }
 
+// 读取redisObject,RedisObject is interface for a redis object
 func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
 	d.info = &Info{
 		Idle: d.lruIdle,
 		Freq: d.lfuFreq,
 	}
+	// 调试
+	fmt.Printf("object type %d for key %s\n", typ, string(key))
+
 	switch typ {
 	case TypeString:
 		value, err := d.readString()
@@ -377,7 +453,7 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
 			d.event.Rpush(key, value)
 		}
 		d.event.EndList(key)
-	case TypeListQuicklist:
+	case TypeListQuickList:
 		length, _, err := d.readLength()
 		if err != nil {
 			return errors.Trace(err)
@@ -390,6 +466,32 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
 			d.readZiplist(key, 0, false)
 		}
 		d.event.EndList(key)
+	case TypeListQuickList2:
+		length, _, err := d.readLength()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		d.info.Encoding = "quicklist2"
+		//size := int(structure.ReadLength(rd))
+		for i := 0; i < int(length); i++ {
+			//container := structure.ReadLength(rd)
+			container, _, _ := d.readLength()
+			if int(container) == quickListNodeContainerPlain {
+				value, err := d.readString()
+				if err != nil {
+					return errors.Trace(err)
+				}
+				d.event.Rpush(key, value)
+			} else if int(container) == quickListNodeContainerPacked {
+				listPackElements := structure.ReadListpack(d.r)
+				for _, value := range listPackElements {
+					d.event.Rpush(key, StringToBytes(value))
+				}
+			} else {
+				log.Panicf("unknown quicklist container %d", container)
+			}
+		}
+		d.event.EndSet(key)
 	case TypeSet:
 		cardinality, _, err := d.readLength()
 		if err != nil {
@@ -456,15 +558,15 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
 			d.event.Hset(key, field, value)
 		}
 		d.event.EndHash(key)
-	case TypeHashZipmap:
+	case TypeHashZipMap:
 		return errors.Trace(d.readZipmap(key, expiry))
-	case TypeListZiplist:
+	case TypeListZipList:
 		return errors.Trace(d.readZiplist(key, expiry, true))
-	case TypeSetIntset:
+	case TypeSetIntSet:
 		return errors.Trace(d.readIntset(key, expiry))
-	case TypeZSetZiplist:
+	case TypeZSetZipList:
 		return errors.Trace(d.readZiplistZset(key, expiry))
-	case TypeHashZiplist:
+	case TypeHashZipList:
 		return errors.Trace(d.readZiplistHash(key, expiry))
 	case TypeStreamListPacks:
 		return errors.Trace(d.readStream(key, expiry))
@@ -476,6 +578,16 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
 		return fmt.Errorf("rdb: unknown object type %d for key %s", typ, key)
 	}
 	return nil
+}
+
+// string 转 byte
+func StringToBytes(s string) []byte {
+	return *(*[]byte)(unsafe.Pointer(
+		&struct {
+			string
+			Cap int
+		}{s, len(s)},
+	))
 }
 
 func (d *decode) readModule(key []byte, expiry int64) error {
@@ -1314,22 +1426,6 @@ func (d *decode) readLength() (uint64, bool, error) {
 		// return uint64(length), false, err
 	}
 
-}
-
-func verifyDump(d []byte) error {
-	if len(d) < 10 {
-		return fmt.Errorf("rdb: invalid dump length")
-	}
-	version := binary.LittleEndian.Uint16(d[len(d)-10:])
-	if version > uint16(rdbVersion) {
-		return fmt.Errorf("rdb: invalid version %d, expecting %d", version, rdbVersion)
-	}
-
-	if binary.LittleEndian.Uint64(d[len(d)-8:]) != crc64.Digest(d[:len(d)-8]) {
-		return fmt.Errorf("rdb: invalid CRC checksum")
-	}
-
-	return nil
 }
 
 func lzfDecompress(in []byte, outlen int) []byte {
