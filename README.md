@@ -114,7 +114,7 @@ USAGE:
 $ ./rdr show -p 8080 *.rdb
 ```
 Note that the memory usage is approximate.
-![show example](https://yqfile.alicdn.com/img_9bc93fc3a6b976fdf862c8314e34f454.png)
+<img width="1155" height="612" alt="image" src="https://github.com/user-attachments/assets/a8b16a78-b232-4282-b2ff-781f0cc87504" />
 
 ```
 $ ./rdr keys example.rdb
