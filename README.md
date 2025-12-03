@@ -11,26 +11,18 @@ This repository is fok  from github.com/xueqiu/rdr.  The requrie rdb file parse 
 
 - 本项目fok自github.com/caiqing0204/rdr <--fok from--xueqiu/rdr，该工具依赖 dongmx/rdb 来解析redis rdb 文件。在此，对以上开源作者，以及提供灵感、pr的朋友们表示感谢。
 
--  与redis-rdb-tools相比，RDR是由golang实现的，速度更快。
-
-注：请阅读我的帖子 [《redis内存离线分析工具选型》](https://mp.weixin.qq.com/s/h7YJd0dVui0FqJLkG8RXxQ)
+- 与redis-rdb-tools相比，RDR是由golang实现的，速度更快。
 
 
 ## Applicable Redis Version（适用 redis 版本）
 
- - RDR V1. 适用于 Redis6 版本 （redis 5.x ~ 6.x ，rdb 的版本则是 9 。
- - Redis 7.0 以上版本（rdb 的版本是 10 +），如果本工具出错：
+ - RDR V1.x 适用于 Redis6（redis 5.x ~ 6.x ，rdb 的版本则是 9 ) 
+ - RDR V2.x 适用于 Redis7.0+（rdb 的版本是 10 +）,redis7.x底层存储类型使用listpack替代ziplist。
  
-   - 可以尝试通过 RedisShake 数据迁移工具，将redis7 RDB数据迁移到redis6下，然后再用rdr\进行分析。
-   - 可以使用 golang版本的工具：github.com/HDT3213/rdb  -->  github.com/919927181/rdr-guigo-Wails【桌面GUI程序】 
-
-备注：
-
-  - 已知问题： list的元素个数是个超大数字（可能溢出）。
+ 备注：
+ 
+  - 如果出现不错误，可以尝试通过 RedisShake 数据迁移工具，将redis7 RDB数据迁移到redis6下，然后再用rdr\进行分析。  
   - 本工具的核心依赖是 rdb 文件解析，不同版本的 redis，其 rdb 文件存在差异，也会增加新的数据类型，存在数据兼容性问题。
-  - RDR 判断 redis rdb 版本的涉及两个文件：
-    - \decoder\decoder.go 中的 'if d.rdbVer <' 我已改成小于16
-    - 依赖\vendor\github.com\919927181\rdb\decoder.go 中的变量rdbVersion,我已改成20。
 
 
 ## Change（变更）
@@ -45,8 +37,8 @@ This repository is fok  from github.com/xueqiu/rdr.  The requrie rdb file parse 
      - 将2021年3月 至 2023年7月，在原作者 github.com/xueqiu/rdr/pulls，除过滤小key外的其他pulls，均同步过来、并解决完毕。
 	 - 遗留问题： redis3.2+新引入的encoding为quicklist作为list的基础类型，list的元素个数是个超大数字，在分析时可能溢出
 	 
-
-备注：github.com/dongmx/rdb  该项目已无维护。本着不重复造轮子的思想，将创建一个基于github.com/hdt3213/rdb的redis 离线内存分析工具 rdr2 【待创建】。
+   - v2.x 
+     - 支持redis7,redis7.x底层存储类型使用listpack替代ziplist。
 
 
 ## Usage（使用）
@@ -176,17 +168,40 @@ portfolio:stock_follower_count:INS104806
  ```
 
 
+4. 构建，输出linu下的可执行文件
 
-4. 构建，输出linu下的可执行文件【见上面】
+见上面的Usage（使用）
 
 
-## develop  （rdb 文件解析开发）
+## develop  （rdb 开发）
 
-大部分 rdb 文件的解析应该都是按照下面这个文档来的：https://github.com/sripathikrishnan/redis-rdb-tools/wiki/Redis-RDB-Dump-File-Format
+ rdr工具的核心部分就是rdb文件解析，作为开发者，我们可以通过以下几个途径来掌握相关知识：
 
-作为开发者，可以对照 redis 源码里面的 rdb.c 这个文件：https://github.com/redis/redis/blob/7.0-rc3/src/rdb.c
+1）大部分 rdb 文件的解析都是按照 https://github.com/sripathikrishnan/redis-rdb-tools/wiki/Redis-RDB-Dump-File-Format  和 github.com/cupcake/rdb 来的，
+   RDB 文件格式说明：https://www.cnblogs.com/Finley/p/16251360.html   ，完整解析器源码在 github.com/HDT3213/rdb
 
-注：rdb 对数字这一块的解码操作要特别注意，不一定能用 BitConverter.ToIntXX 来获得正确的值！！
+2）Redis迁移工具RedisShake（语言golang），功能之一 从 RDB 文件中读取数据写入目标端，因此，我们可以借鉴rdb文件解析功能
+   项目地址：https://github.com/tair-opensource/RedisShake
+   rdb.go源码地址：https://github.com/tair-opensource/RedisShake/tree/v4/internal/rdb
+
+3）可以对照 redis 源码
+
+```
+  rdb.c 文件：https://github.com/redis/redis/blob/7.0-rc3/src/rdb.c       // RDB 文件读写，行1736：robj *rdbLoadObject
+  rdb.h 文件：https://github.com/redis/redis/blob/unstable/src/rdb.h   // RDB version、RDB object types 等定义
+
+```
+
+  注：rdb 对数字这一块的解码操作要特别注意，不一定能用 BitConverter.ToIntXX 来获得正确的值！！ 
+
+
+## 交流群/联系我
+
+添加微信（Sd-LiYanJing），备注GitHub，即可进群
+
+
+注：请阅读我的帖子 [《redis内存离线分析工具选型》](https://mp.weixin.qq.com/s/h7YJd0dVui0FqJLkG8RXxQ)
+
 
 ## License
 

@@ -465,36 +465,6 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
 			d.readZiplist(key, 0, false)
 		}
 		d.event.EndList(key)
-	case TypeListQuickList2:
-		length, _, err := d.readLength()
-		if err != nil {
-			return errors.Trace(err)
-		}
-		d.info.Encoding = "quicklist2"
-		d.info.Zips = length
-		d.event.StartList(key, int64(-1), expiry, d.info)
-		for i := 0; i < int(length); i++ {
-			container, _, err2 := d.readLength()
-			if err2 != nil {
-				return errors.Trace(err)
-			}
-			if int(container) == quickListNodeContainerPlain {
-				value, err := d.readString()
-				if err != nil {
-					return errors.Trace(err)
-				}
-				d.event.Rpush(key, value)
-			} else if int(container) == quickListNodeContainerPacked {	
-				listPackElements := structure.ReadListpack(d.r)	
-				for _, value2 := range listPackElements {
-					bytes := []byte(value2)
-					d.event.Rpush(key, bytes)
-				}
-			} else {
-				log.Panicf("unknown quicklist container %d", container)
-			}
-		}
-		d.event.EndList(key)
 	case TypeSet:
 		cardinality, _, err := d.readLength()
 		if err != nil {
@@ -577,6 +547,75 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
 		fallthrough
 	case TypeModule2:
 		return d.readModule(key, expiry)
+	case TypeListQuickList2:
+		length, _, err := d.readLength()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		d.info.Encoding = "quicklist2"
+		d.info.Zips = length
+		d.event.StartList(key, int64(-1), expiry, d.info)
+		for i := 0; i < int(length); i++ {
+			container, _, err2 := d.readLength()
+			if err2 != nil {
+				return errors.Trace(err)
+			}
+			if int(container) == quickListNodeContainerPlain {
+				value, err := d.readString()
+				if err != nil {
+					return errors.Trace(err)
+				}
+				d.event.Rpush(key, value)
+			} else if int(container) == quickListNodeContainerPacked {	
+				listPackElements := structure.ReadListpack(d.r)	
+				for _, value2 := range listPackElements {
+					bytes := []byte(value2)
+					d.event.Rpush(key, bytes)
+				}
+			} else {
+				log.Panicf("unknown quicklist container %d", container)
+			}
+		}
+		d.event.EndList(key)
+	case TypeHashListPack:
+		d.info.Encoding = "hashtablepack"		
+		list := structure.ReadListpack(d.r)
+		size := len(list)
+		d.event.StartHash(key, int64(size/2), expiry, d.info)
+		for i := 0; i < size; i += 2 {
+			fieldStr := list[i]
+			valueStr := list[i+1]
+			FiledBytes := []byte(fieldStr)
+			ValueBytes := []byte(valueStr)
+			d.event.Hset(key, FiledBytes, ValueBytes)
+		}
+		d.event.EndHash(key)
+	case TypeZSetListPack:
+		list := structure.ReadListpack(d.r)
+		size := len(list)
+		if size%2 != 0 {
+			log.Panicf("zset listpack size is not even. size=[%d]", size)
+		}
+		d.info.Encoding = "zsetlistpack"
+		d.event.StartZSet(key, int64(size), expiry, d.info)
+		for i := 0; i < size; i += 2 {
+			memberStr := list[i]
+			scoreStr := list[i+1]   
+			memberBytes := []byte(memberStr)
+			scoreFloat, _ := strconv.ParseFloat(scoreStr, 64)
+			d.event.Zadd(key, scoreFloat, memberBytes)
+		}
+		d.event.EndZSet(key)
+	case TypeSetListPack:
+		elements := structure.ReadListpack(d.r)
+		size := len(elements)
+		d.info.Encoding = "setlistpack"
+		d.event.StartSet(key, int64(size), expiry, d.info)
+		for _, eleStr := range elements {
+			elerBytes := []byte(eleStr)
+			d.event.Sadd(key, elerBytes)
+		}
+		d.event.EndSet(key)
 	default:
 		return fmt.Errorf("rdb: unknown object type %d for key %s", typ, key)
 	}

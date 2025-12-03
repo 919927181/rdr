@@ -170,7 +170,11 @@ func (d *Decoder) StartHash(key []byte, length, expiry int64, info *rdb.Info) {
 		bytes += uint64(info.SizeOfValue)
 	} else if info.Encoding == "hashtable" {
 		bytes += d.m.HashTableOverHead(uint64(length))
-	} else {
+	} else if info.Encoding == "hashtablepack" {
+		bytes += 0 //临时解决，后期再写计算方法
+	} else if info.Encoding == "setlistpack" {
+		bytes += 0 //临时解决，后期再写计算方法
+	}else {
 		panic(fmt.Sprintf("unexpected size(0) or encoding:%s", info.Encoding))
 	}
 
@@ -193,8 +197,8 @@ func (d *Decoder) Hset(key, field, value []byte) {
 		e.FieldOfLargestElem = string(field)
 		e.LenOfLargestElem = lenOfElem
 	}
-
-	if d.currentInfo.Encoding == "hashtable" {
+    // 临时解决hashtablepack
+	if d.currentInfo.Encoding == "hashtable"  || d.currentInfo.Encoding == "hashtablepack" {
 		e.Bytes += d.m.SizeofString(field)
 		e.Bytes += d.m.SizeofString(value)
 		e.Bytes += d.m.HashTableEntryOverHead()
@@ -224,7 +228,7 @@ func (d *Decoder) Sadd(key, member []byte) {
 		e.FieldOfLargestElem = string(member)
 		e.LenOfLargestElem = lenOfElem
 	}
-
+    // 待解决setlistpack
 	if d.currentInfo.Encoding == "hashtable" {
 		e.Bytes += d.m.SizeofString(member)
 		e.Bytes += d.m.HashTableEntryOverHead()
@@ -338,6 +342,8 @@ func (d *Decoder) StartZSet(key []byte, cardinality, expiry int64, info *rdb.Inf
 		bytes += uint64(info.SizeOfValue)
 	} else if info.Encoding == "skiplist" {
 		bytes += d.m.SkipListOverHead(uint64(cardinality))
+	} else if info.Encoding == "zsetlistpack" {
+		bytes += 0 //临时，稍后写计算方法
 	} else {
 		panic(fmt.Sprintf("unexpected size(0) or encoding:%s", info.Encoding))
 	}
@@ -359,8 +365,8 @@ func (d *Decoder) Zadd(key []byte, score float64, member []byte) {
 		e.FieldOfLargestElem = string(member)
 		e.LenOfLargestElem = lenOfElem
 	}
-
-	if d.currentInfo.Encoding == "skiplist" {
+    // 临时解决zsetlistpack
+	if d.currentInfo.Encoding == "skiplist" || d.currentInfo.Encoding == "zsetlistpack" {
 		e.Bytes += 8 // sizeof(score)
 		e.Bytes += d.m.SizeofString(member)
 		e.Bytes += d.m.SkipListEntryOverHead()
