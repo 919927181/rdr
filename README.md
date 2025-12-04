@@ -5,29 +5,34 @@ RDR: redis data reveal
 
 RDR(redis data reveal) is a tool to parse redis rdbfile.  Through redis memory analysis, it helps us find bigkeys and keys that are growing without limit.
 
-This repository is fok  from github.com/xueqiu/rdr.  The requrie rdb file parse is github.com/dongmx/rdb ，now in this repository  has been replaced  github.com/919927181/rdb
-
 - RDR(redis data Reveal)是一个用于离线解析 redis rdb 文件的工具，通过redis内存分析，帮助我们找出bigkey、日益无限制增长的key等。
-
-- 本项目fok自github.com/caiqing0204/rdr <--fok from--xueqiu/rdr，该工具依赖 dongmx/rdb 来解析redis rdb 文件。在此，对以上开源作者，以及提供灵感、pr的朋友们表示感谢。
-
-- 与redis-rdb-tools相比，RDR是由golang实现的，速度更快。
+- RDR由golang实现的，速度上比较快。
 
 
-## Applicable Redis Version（适用 redis 版本）
+## Fork（基于）
 
- - RDR V1.x 适用于 Redis6（redis 5.x ~ 6.x ，rdb 的版本则是 9 ) 
- - RDR V2.x 适用于 Redis7.0+（rdb 的版本是 10 +）,redis7.x底层存储类型使用listpack替代ziplist。
- 
+This repository is fork  from github.com/xueqiu/rdr.  The requrie rdb file parse is github.com/dongmx/rdb ，in this project has been replaced  github.com/919927181/rdb
+
+- 本项目基于 xueqiu/rdr 开源项目开发，xueqiu/rdr是雪球公司基于redis-rdb-tool开源项目开发的，它于 2019 年 10 月 9 日后，未再更新维护。
+- 核心依赖 919927181/rdb（基于dongmx/rdb）解析redis rdb 文件。
+
+在此，对原开源作者，以及提供灵感、pr的朋友们表示感谢。
+
+
+## Redis Version Support（redis 版本支持）
+
+ - RDR V1.x 支持 Redis6（redis 5.x ~ 6.x ，rdb 的版本是 9 ) 
+ - RDR V2.x 支持 Redis7.0+（rdb 文件版本 10~12，mysql8.0的rdb版本是12）
+  
  备注：
- 
-  - 如果出现不错误，可以尝试通过 RedisShake 数据迁移工具，将redis7 RDB数据迁移到redis6下，然后再用rdr\进行分析。  
-  - 本工具的核心依赖是 rdb 文件解析，不同版本的 redis，其 rdb 文件存在差异，也会增加新的数据类型，存在数据兼容性问题。
+  - 针对redis7、8版本，rdb文件解析主要是解决listpack数据类型问题。鉴于 redis stream 用于消息队列，我们通常不用redis作为mq，因此stream增加的类型未处理。  
+  - RDR的核心依赖是 rdb 文件解析，不同版本的 redis，其 rdb 文件存在差异，也会增加新的数据类型，存在数据兼容性问题。
+  - 如果出现不错误，可以尝试通过 RedisShake 数据迁移工具，将redis7 RDB数据迁移到redis6下，然后再用rdr\进行分析。
 
 
 ## Change（变更）
-- caiqing0204：在源代码基础上，增加了key所属DB，这样可以更直观的查看key元信息。
-- 泰山李工：
+- caiqing0204：增加了key所属DB，这样可以更直观的查看key元信息。
+- 泰山李工（我）：
    - v1.0.2
      - 将依赖 github.com/dongmx/rdb 中的rdbVersion 由9改成20【2025-11-08】
      - 修改html布局、将标题英文改为中文 【2025-11-08】
@@ -38,7 +43,7 @@ This repository is fok  from github.com/xueqiu/rdr.  The requrie rdb file parse 
 	 - 遗留问题： redis3.2+新引入的encoding为quicklist作为list的基础类型，list的元素个数是个超大数字，在分析时可能溢出
 	 
    - v2.x 
-     - 支持redis7,redis7.x底层存储类型使用listpack替代ziplist。
+     - 支持redis7,主要解决了redis7.x底层存储类型使用listpack替代ziplist的解析问题。
 
 
 ## Usage（使用）
@@ -192,13 +197,14 @@ portfolio:stock_follower_count:INS104806
 
 ```
 
-  注：rdb 对数字这一块的解码操作要特别注意，不一定能用 BitConverter.ToIntXX 来获得正确的值！！ 
+注：  
+   - rdb 对数字这一块的解码操作要特别注意，不一定能用 BitConverter.ToIntXX 来获得正确的值！！ 
+   - redis7.x底层存储类型使用listpack替代ziplist。例如，若List大小超过阈值（list-max-listpack-size），Redis会切换为ziplist或quicklist编码
 
 
 ## 交流群/联系我
 
 添加微信（Sd-LiYanJing），备注GitHub，即可进群
-
 
 注：请阅读我的帖子 [《redis内存离线分析工具选型》](https://mp.weixin.qq.com/s/h7YJd0dVui0FqJLkG8RXxQ)
 

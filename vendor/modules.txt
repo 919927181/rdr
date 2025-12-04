@@ -1,4 +1,4 @@
-# github.com/919927181/rdb v1.0.4-0.20251202080316-42990b3d096e
+# github.com/919927181/rdb v1.0.4-0.20251204035539-67abe80fd13f
 ## explicit; go 1.18
 github.com/919927181/rdb
 github.com/919927181/rdb/core/structure

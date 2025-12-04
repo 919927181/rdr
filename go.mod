@@ -3,7 +3,7 @@ module github.com/919927181/rdr
 go 1.18
 
 require (
-	github.com/919927181/rdb v1.0.4-0.20251202080316-42990b3d096e
+	github.com/919927181/rdb v1.0.4-0.20251204035539-67abe80fd13f
 	github.com/dustin/go-humanize v1.0.0
 	github.com/elazarl/go-bindata-assetfs v1.0.1
 	github.com/julienschmidt/httprouter v1.3.0

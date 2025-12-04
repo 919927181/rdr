@@ -186,9 +186,9 @@ const (
 	TypeZSetZipList     ValueType = 12
 	TypeHashZipList     ValueType = 13
 	TypeListQuickList   ValueType = 14 // RDB_TYPE_LIST_QUICKLIST
-	TypeStreamListPacks ValueType = 15 // RDB_TYPE_STREAM_LISTPACKS
+	TypeStreamListPacks ValueType = 15 // RDB_TYPE_STREAM_LISTPACKS，
 
-	//rdb v2.0.0 The following are added
+	//rdb v2.0.0 add，注：Redis Stream 主要用于消息队列，我们通常不用redis作为mq，因此不予处理
 	TypeHashListPack     ValueType = 16 // RDB_TYPE_HASH_ZIPLIST ,Redis7.0开始使用listpack替代了ziplist，
 	TypeZSetListPack	 ValueType = 17 // RDB_TYPE_ZSET_LISTPACK
 	TypeListQuickList2   ValueType = 18 // DB_TYPE_LIST_QUICKLIST_2 https://github.com/redis/redis/pull/9357
@@ -212,10 +212,12 @@ const (
 	rdb64bitLen = 0x81
 	rdbEncVal   = 3
 	rdbLenErr   = math.MaxUint64
-
+    //rdb v2 add for redis7
 	kFlagSlotInfo      = 244 // (Redis 7.4) RDB_OPCODE_SLOT_INFO: slot info
 	kFlagFunction2     = 245 // RDB_OPCODE_FUNCTION2: function library data
 	kFlagFunction      = 246 // RDB_OPCODE_FUNCTION_PRE_GA: old function library data for 7.0 rc1 and rc2
+
+	// rdb v1 for redis6
 	rdbOpCodeModuleAux = 247 // RDB_OPCODE_MODULE_AUX: Module auxiliary data.
 	rdbOpCodeIdle      = 248 // RDB_OPCODE_IDLE: LRU idle time.
 	rdbOpCodeFreq      = 249 // RDB_OPCODE_FREQ: LFU frequency.
@@ -226,7 +228,7 @@ const (
 	rdbOpCodeSelectDB  = 254 // RDB_OPCODE_SELECTDB: DB number of the following keys.
 	rdbOpCodeEOF       = 255 // RDB_OPCODE_EOF: End of the RDB file.
 
-	//rdb v2.0.0 add
+	//rdb v2 add for redis7
 	moduleTypeNameCharSet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
 
 	rdbModuleOpCodeEOF    = 0 // RDB_MODULE_OPCODE_EOF: End of module value.
@@ -322,6 +324,21 @@ func (d *decode) decode() error {
 			return errors.Wrap(err, errors.New("readfailed"))
 		}
 		switch objType {
+		case kFlagSlotInfo:
+			_, _, _ = d.readLength() // slot_id
+			_, _, _ = d.readLength() // slot_size
+			_, _, _ = d.readLength() // expires_slot_size
+		case kFlagFunction:
+			log.Panicf("function library data not supported, need PR to support")
+		case kFlagFunction2:
+			function, err := d.readString()	
+			if err != nil {
+				return errors.Trace(err)
+			}		
+			log.Debugf("function: %s", function)
+			//e := entry.NewEntry()
+			//e.Argv = []string{"function", "load", function}
+			//ld.ch <- e
 		case rdbOpCodeFreq:
 			b, err := d.r.ReadByte()
 			d.lfuFreq = int(b)
@@ -616,6 +633,14 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
 			d.event.Sadd(key, elerBytes)
 		}
 		d.event.EndSet(key)
+	case TypeHashMetadataPreGa:
+		return errors.Trace(d.readHashTtl(key, expiry, true))
+	case TypeHashListPackExPre:
+		return errors.Trace(d.readHashTtl(key, expiry, true))
+	case TypeHashMetaData:
+		return errors.Trace(d.readHashListPackTtl(key, expiry, false))
+	case TypeHashListPackEx:
+		return errors.Trace(d.readHashListPackTtl(key, expiry, false))
 	default:
 		return fmt.Errorf("rdb: unknown object type %d for key %s", typ, key)
 	}
@@ -1487,4 +1512,94 @@ func lzfDecompress(in []byte, outlen int) []byte {
 		}
 	}
 	return out
+}
+
+// 这是 Redis7.4 最新的功能，即为 Hash 中的每个 Field 单独设置过期时间。想想确实有用，以前都是只有整个 Hash key 的过期时间
+func (d *decode) readHashTtl(key []byte, expiry int64, isPre bool) error {
+	rd := d.r
+	var minExpire int64
+	//var expireAt int64
+	if !isPre {
+		minExpire = int64(structure.ReadUint64(rd))
+		//log.Debugf("%s minExpire is %d", key, minExpire)
+	}
+	size := int(structure.ReadLength(rd))
+	/*size, _, err := d.readLength()
+	if err != nil {
+		return errors.Trace(err)
+	}*/
+	d.info.Encoding = "hashtable" //临时处理
+	d.event.StartHash(key, int64(size/2), expiry, d.info)
+	for i := 0; i < int(size); i++ {
+		// Value is absolute for 7.4RC
+		expireAt := int64(structure.ReadLength(rd))		
+		if !isPre{
+			if expireAt != 0{
+				expireAt = expireAt + minExpire - 1
+			}
+		}
+		/*ttl, _, err := d.readLength()
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		if isPre {
+			expireAt = int64(ttl)
+		} else {			
+			if ttl != 0{
+				expireAt = int64(ttl) + minExpire - 1
+			} else {
+				expireAt = 0
+			}
+		}*/
+
+		fieldStr := structure.ReadString(rd)
+		valueStr := structure.ReadString(rd)
+		FiledBytes := []byte(fieldStr)
+		ValueBytes := []byte(valueStr)		
+		if expireAt != 0{
+			//为 Hash 中的每个 Field 单独设置过期时间ttl
+			//o.cmdC <- RedisCmd{"hpexpireat", o.key, strconv.FormatInt(expireAt, 10), "fields", "1", key}
+			//因本工具暂时还不支持过期时间分析，后期再处理			
+		}
+		d.event.Hset(key, FiledBytes, ValueBytes)
+
+	}
+	d.event.EndHash(key)
+	return nil
+}
+
+func (d *decode) readHashListPackTtl(key []byte, expiry int64, isPre bool) error {
+	rd := d.r
+	if !isPre {
+		// read minExpire
+		_ = int64(structure.ReadUint64(rd))
+	}
+	list := structure.ReadListpack(rd)
+	size := len(list)
+
+	d.info.Encoding = "hashtable" //临时处理
+	d.event.StartHash(key, int64(size/3), expiry, d.info)
+
+	for i := 0; i < size; i += 3 {
+		fieldStr := list[i]
+		valueStr := list[i+1]
+		FiledBytes := []byte(fieldStr)
+		ValueBytes := []byte(valueStr)	
+
+		expireAt,err := strconv.ParseInt(list[i+2], 10, 64)
+		if err != nil{
+			log.Panicf("readHashListpackTtl parsing expireAt %s error", list[i])			
+		}
+		if expireAt != 0{
+			//为 Hash 中的每个 Field 单独设置过期时间ttl
+			//o.cmdC <- RedisCmd{"hpexpireat", o.key, strconv.FormatInt(expireAt, 10), "fields", "1", key}
+			//因本工具暂时还不支持过期时间分析，后期再处理			
+		}
+		d.event.Hset(key, FiledBytes, ValueBytes)
+	}
+
+	d.event.EndHash(key)
+	return nil
+
 }
