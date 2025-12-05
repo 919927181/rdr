@@ -29,59 +29,59 @@ import (
 //go:generate go-bindata -prefix "views/" -o=views/views.go -pkg=views -ignore views.go views/...
 
 // keys is function for command `keys`
-// output all keys in rdbfile(s) get from args
+// output all keys in rdb file(s) get from args
 func keys(c *cli.Context) {
-	if c.NArg() < 1 {
-		fmt.Fprintln(c.App.ErrWriter, "keys requires at least 1 argument")
-		cli.ShowCommandHelp(c, "keys")
-		return
-	}
-	for _, filepath := range c.Args() {
-		decoder := decoder.NewDecoder()
-		go dump.Decode(c, decoder, filepath)
-		for e := range decoder.Entries {
-			fmt.Fprintf(c.App.Writer, "%v\n", e.Key)
-		}
-	}
+    if c.NArg() < 1 {
+        fmt.Fprintln(c.App.ErrWriter, "keys requires at least 1 argument")
+        cli.ShowCommandHelp(c, "keys")
+        return
+    }
+    for _, filepath := range c.Args() {
+        decoder := decoder.NewDecoder()
+        go dump.Decode(c, decoder, filepath)
+        for e := range decoder.Entries {
+            fmt.Fprintf(c.App.Writer, "%v\n", e.Key)
+        }
+    }
 }
 
 func main() {
-	app := cli.NewApp()
-	app.Name = "rdr"
-	app.Usage = "a tool to parse redis rdbfile"
-	app.Version = "v0.0.1"
-	app.Writer = os.Stdout
-	app.ErrWriter = os.Stderr
-	app.Commands = []cli.Command{
-		cli.Command{
-			Name:      "dump",
-			Usage:     "dump statistical information of rdbfile to STDOUT",
-			ArgsUsage: "FILE1 [FILE2] [FILE3]...",
-			Action:    dump.ToCliWriter,
-		},
-		cli.Command{
-			Name:      "show",
-			Usage:     "show statistical information of rdbfile by webpage",
-			ArgsUsage: "DIR1 [DIR2] [DIR3] or FILE1 [FILE2] [FILE3]...",
-			Flags: []cli.Flag{
-				cli.UintFlag{
-					Name:  "port, p",
-					Value: 8080,
-					Usage: "Port for rdr to listen",
-				},
-			},
-			Action: dump.Show,
-		},
-		cli.Command{
-			Name:      "keys",
-			Usage:     "get all keys from rdbfile",
-			ArgsUsage: "FILE1 [FILE2] [FILE3]...",
-			Action:    keys,
-		},
-	}
-	app.CommandNotFound = func(c *cli.Context, command string) {
-		fmt.Fprintf(c.App.ErrWriter, "command %q can not be found.\n", command)
-		cli.ShowAppHelp(c)
-	}
-	app.Run(os.Args)
+    app := cli.NewApp()
+    app.Name = "rdr"
+    app.Usage = "a tool to parse redis rdb file"
+    app.Version = "v0.0.1"
+    app.Writer = os.Stdout
+    app.ErrWriter = os.Stderr
+    app.Commands = []cli.Command{
+        cli.Command{
+            Name:      "dump",
+            Usage:     "dump statistical information of rdb file to STDOUT",
+            ArgsUsage: "FILE1 [FILE2] [FILE3]...",
+            Action:    dump.ToCliWriter,
+        },
+        cli.Command{
+            Name:      "show",
+            Usage:     "show statistical information of rdb file by webpage",
+            ArgsUsage: "DIR1 [DIR2] [DIR3] or FILE1 [FILE2] [FILE3]...",
+            Flags: []cli.Flag{
+                cli.UintFlag{
+                    Name:  "port, p",
+                    Value: 8080,
+                    Usage: "Port for rdr to listen",
+                },
+            },
+            Action: dump.Show,
+        },
+        cli.Command{
+            Name:      "keys",
+            Usage:     "get all keys from rdb file",
+            ArgsUsage: "FILE1 [FILE2] [FILE3]...",
+            Action:    keys,
+        },
+    }
+    app.CommandNotFound = func(c *cli.Context, command string) {
+        fmt.Fprintf(c.App.ErrWriter, "command %q can not be found.\n", command)
+        cli.ShowAppHelp(c)
+    }
+    app.Run(os.Args)
 }

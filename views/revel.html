@@ -1,5 +1,5 @@
 <div class="content-wrapper" style="min-height: 100px; height: auto; overflow: hidden">
-    
+
     <!--各类型key的数量-->
     <div class="col-md-3">
         <section class="content-header">
@@ -18,13 +18,13 @@
             <div class="box">
                 <div class="box-body">
                     <div id="canvas-holder-1" style="width:100%">
-                        <canvas id="chart-area-1" />  
+                        <canvas id="chart-area-1" />
                     </div>
                 </div>
             </div>
         </section>
     </div>
-    
+
     <!--len level 数量、内存分析-->
     <div class="col-md-3">
         <section class="content-header">
@@ -76,21 +76,22 @@
             </div>
         </section>
     </div>
-    
+
     <!--top100 最大keys-->
     <div class="col-md-7">
         <section class="content-header">
             <div class="box">
                 <div class="box-body">
-                    <center><strong>top 100 largest keys</strong></center><br>
+                    <center><strong>top 100 bigkey(按内存)</strong></center><br>
                     <table class="table table-condensed table-hover sortable" style="word-break:break-all; word-wrap:break-all;">
                         <thead>
                             <tr>
                                 <td class="sorttable_alpha"> Key </td>
                                 <td class="sorttable_alpha" style="width:32px !important;"> Db </td>
                                 <td class="sorttable_alpha" style="width:80px !important;"> Type </td>
-                                <td class="sorttable_alpha" style="width:80px !important;"> Bytes </td>
-                                <td class="sorttable_numeric"> NumOfElement </td>
+                                <td class="sorttable_alpha" style="width:120px !important;"> Encoding </td>
+                                <td class="sorttable_alpha" style="width:80px !important;"> 占用内存 </td>
+                                <td class="sorttable_numeric"> 元素数量 </td>
                             </tr>
                         </thead>
                         <tbody>
@@ -99,6 +100,7 @@
                                 <td>{{$entry.Key}}</td>
                                 <td>{{$entry.Db}}</td>
                                 <td>{{$entry.Type}}</td>
+                                <td>{{$entry.Encoding}}</td>
                                 <td>{{humanizeBytes $entry.Bytes}}</td>
                                 <td>{{humanizeComma $entry.NumOfElem}}</td>
                             </tr>

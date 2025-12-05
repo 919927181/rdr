@@ -3,9 +3,9 @@ RDR: redis data reveal
 
 ## About（介绍）
 
-RDR(redis data reveal) is a tool to parse redis rdbfile.  Through redis memory analysis, it helps us find bigkeys and keys that are growing without limit.
+RDR (redis data Reveal) is a tool for offline analysis of redis rdb files. Through it, you can quickly discover bigkeys, help you grasp the occupation and distribution of keys in memory, learn which keys are growing infinitely (through key expiration time or quantity). It provides data support for your optimization operations and helps you avoid problems such as insufficient memory and performance degradation caused by key skew.
 
-- RDR(redis data Reveal)是一个用于离线解析 redis rdb 文件的工具，通过redis内存分析，帮助我们找出bigkey、日益无限制增长的key等。
+- RDR(redis data Reveal)是一个用于离线分析 redis rdb 文件的工具，通过它，可以快速发现实例中的bigkey，帮助您掌握Key在内存中的占用和分布、得知哪些key在无限增长（通过Key过期时间或数量）等信息，为您的优化操作提供数据支持，帮助您避免因Key倾斜引发的内存不足、性能下降等问题。
 - RDR由golang实现的，速度上比较快。
 
 

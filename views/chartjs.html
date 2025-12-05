@@ -56,7 +56,7 @@
             events: ['mousemove', 'mouseout', 'click', 'touchstart', 'touchmove'],
             plugins: {
                 legend: {
-                    display: false,  //是否显示图例标签                    
+                    display: false,  //是否显示图例标签
                     position: 'left'
                 },
                 title: {
@@ -114,7 +114,7 @@
             events: ['mousemove', 'mouseout', 'click', 'touchstart', 'touchmove'],
             plugins: {
                 legend: {
-                    display: false,  //是否显示图例标签                    
+                    display: false,  //是否显示图例标签
                     position: 'left'
                 },
                 title: {
@@ -148,11 +148,11 @@
 
         }
     };
-    
+
 
     window.onload = function() {
 
-        //key数量和内存的饼图，本文件是生产图表，前端页面在revel.html        
+        //key数量和内存的饼图，本文件是生产图表，前端页面在revel.html
         //如何josn对象直接赋给另一个变量，返回的是同一个对象（自然取出的数据也是相同的），解决办法是先转字符串
         //注：用这种方式，导致数据提示不能格式化，因此定义了各自的配置变量
         //var rawPieConfig = JSON.stringify(pieConfig);
@@ -168,7 +168,7 @@
         pieConfig0.data.datasets[0].data.push({{$num}});
         pieConfig1.data.datasets[0].data.push({{index $.TypeBytes $type}});
         pieConfig0.data.labels.push({{$type}});
-        pieConfig1.data.labels.push({{$type}}); 
+        pieConfig1.data.labels.push({{$type}});
         {{end}}
 
 
@@ -178,17 +178,17 @@
         window.myPie1 = new Chart(pieCtx1, pieConfig1);
 
         //以下是len lver的柱状图
-        var count = {}; 
+        var count = {};
         {{range $type, $entries := .LenLevelCount}}
-        var entries = []; 
+        var entries = [];
         {{range $entry := $entries}}
         entries.push({
             label: {{$entry.Key}},
             bytes: {{$entry.Bytes}},
             num: {{$entry.Num}}
-        }); 
+        });
         {{end}}
-        count[{{$type}}] = entries; 
+        count[{{$type}}] = entries;
         {{end}}
 
         for (typ in count) {
