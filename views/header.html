@@ -25,4 +25,22 @@
             </ul>
         </div>
     </nav>
+
+    <!--表格td内容过多时,进行显示限制 -->
+    <style>
+        .limited-width {
+            max-width: 200px; /* 设置最大宽度 */
+            overflow: hidden; /* 默认隐藏溢出的内容 */
+            white-space: nowrap; /* 防止文本换行 */
+            text-overflow: ellipsis; /* 显示省略号 */
+        }
+
+        /* 鼠标滑过  显示隐藏的内容  伴有横向的滚动条 */
+        .limited-width:hover {
+            overflow:auto; /* 鼠标悬停时显示全部内容 */
+            text-overflow:clip;
+        }
+
+    </style>
+
 </header>

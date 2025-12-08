@@ -65,7 +65,7 @@ type Decoder interface {
     Set(key, value []byte, expiry int64, info *Info)
     // StartHash is called at the beginning of a hash.
     // Hset will be called exactly length times before EndHash.
-    StartHash(key []byte, length, expiry int64, info *Info)
+    StartHash(key []byte, length, expiry int64, info *Info, typ string)
     // Hset is called once for each field=value pair in a hash.
     Hset(key, field, value []byte)
     // EndHash is called when there are no more fields in a hash.
@@ -168,7 +168,23 @@ type decode struct {
 // ValueType of redis type
 type ValueType byte
 
+// 定义数据类型，使用 type keyname 看到的应用层的数据类型；使用 object encoding keyname 看到的则是redis底层数据存储类型
+const (
+    TypeStrString   string = "string"
+    TypeStrList     string = "list"
+    TypeStrSet      string = "set"
+    TypeStrHash     string = "hash"
+    TypeStrStream   string = "stream"
+)
+
+
 // types value
+// string: TypeString
+// list: TypeList, TypeListZipList, TypeListQuickList, TypeListQuickList2
+// set: TypeSet, TypeSetIntSet, TypeSetListPack
+// zset: TypeZSet, TypeZSet2, TypeZSetZipList, TypeZSetListPack
+// hash: TypeHash, TypeHashZipMap, TypeHashZipList, TypeHashListPack, TypeHashMetadataPreGa, TypeHashListPackExPre, TypeHashMetaData, TypeHashListPackEx
+// 注：Redis7.0开始使用listpack替代了ziplist，小于阈值时使用listpack
 const (
     TypeString  ValueType = 0 // RDB_TYPE_STRING
     TypeList    ValueType = 1
@@ -189,7 +205,7 @@ const (
     TypeStreamListPacks ValueType = 15 // RDB_TYPE_STREAM_LISTPACKS，
 
     //rdb v2.0.0 add，注：Redis Stream 主要用于消息队列，我们通常不用redis作为mq，因此不予处理
-    TypeHashListPack     ValueType = 16 // RDB_TYPE_HASH_ZIPLIST ,Redis7.0开始使用listpack替代了ziplist，
+    TypeHashListPack     ValueType = 16 // RDB_TYPE_HASH_ZIPLIST
     TypeZSetListPack     ValueType = 17 // RDB_TYPE_ZSET_LISTPACK
     TypeListQuickList2   ValueType = 18 // DB_TYPE_LIST_QUICKLIST_2 https://github.com/redis/redis/pull/9357
     TypeStreamListPacks2 ValueType = 19 // RDB_TYPE_STREAM_LISTPACKS2
@@ -534,7 +550,7 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
             return errors.Trace(err)
         }
         d.info.Encoding = "hashtable"
-        d.event.StartHash(key, int64(length), expiry, d.info)
+        d.event.StartHash(key, int64(length), expiry, d.info, TypeStrHash)
         for length > 0 {
             length--
             field, err := d.readString()
@@ -549,7 +565,7 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
         }
         d.event.EndHash(key)
     case TypeHashZipMap:
-        return errors.Trace(d.readZipmap(key, expiry))
+        return errors.Trace(d.readZipmap(key, expiry, TypeStrHash))
     case TypeListZipList:
         return errors.Trace(d.readZiplist(key, expiry, true))
     case TypeSetIntSet:
@@ -557,7 +573,7 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
     case TypeZSetZipList:
         return errors.Trace(d.readZiplistZset(key, expiry))
     case TypeHashZipList:
-        return errors.Trace(d.readZiplistHash(key, expiry))
+        return errors.Trace(d.readZiplistHash(key, expiry, TypeStrHash))
     case TypeStreamListPacks:
         return errors.Trace(d.readStream(key, expiry))
     case TypeModule:
@@ -598,7 +614,7 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
         d.info.Encoding = "hashtablepack"
         list := structure.ReadListpack(d.r)
         size := len(list)
-        d.event.StartHash(key, int64(size/2), expiry, d.info)
+        d.event.StartHash(key, int64(size/2), expiry, d.info, TypeStrHash)
         for i := 0; i < size; i += 2 {
             fieldStr := list[i]
             valueStr := list[i+1]
@@ -634,13 +650,13 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
         }
         d.event.EndSet(key)
     case TypeHashMetadataPreGa:
-        return errors.Trace(d.readHashTtl(key, expiry, true))
+        return errors.Trace(d.readHashTtl(key, expiry, true, TypeStrHash))
     case TypeHashListPackExPre:
-        return errors.Trace(d.readHashTtl(key, expiry, true))
+        return errors.Trace(d.readHashTtl(key, expiry, true, TypeStrHash))
     case TypeHashMetaData:
-        return errors.Trace(d.readHashListPackTtl(key, expiry, false))
+        return errors.Trace(d.readHashListPackTtl(key, expiry, false, TypeStrHash))
     case TypeHashListPackEx:
-        return errors.Trace(d.readHashListPackTtl(key, expiry, false))
+        return errors.Trace(d.readHashListPackTtl(key, expiry, false, TypeStrHash))
     default:
         return fmt.Errorf("rdb: unknown object type %d for key %s", typ, key)
     }
@@ -811,7 +827,7 @@ func (d *decode) readStream(key []byte, expiry int64) error {
     return nil
 }
 
-func (d *decode) readZipmap(key []byte, expiry int64) error {
+func (d *decode) readZipmap(key []byte, expiry int64, typ string) error {
     var length int
     zipmap, err := d.readString()
     if err != nil {
@@ -833,7 +849,7 @@ func (d *decode) readZipmap(key []byte, expiry int64) error {
     }
     d.info.Encoding = "zipmap"
     d.info.SizeOfValue = len(zipmap)
-    d.event.StartHash(key, int64(length), expiry, d.info)
+    d.event.StartHash(key, int64(length), expiry, d.info, typ)
     for i := 0; i < length; i++ {
         field, err := readZipmapItem(buf, false)
         if err != nil {
@@ -1131,7 +1147,7 @@ func (d *decode) readZiplistZset(key []byte, expiry int64) error {
     return nil
 }
 
-func (d *decode) readZiplistHash(key []byte, expiry int64) error {
+func (d *decode) readZiplistHash(key []byte, expiry int64, typ string) error {
     ziplist, err := d.readString()
     if err != nil {
         return errors.Trace(err)
@@ -1144,7 +1160,7 @@ func (d *decode) readZiplistHash(key []byte, expiry int64) error {
     length /= 2
     d.info.Encoding = "ziplist"
     d.info.SizeOfValue = len(ziplist)
-    d.event.StartHash(key, length, expiry, d.info)
+    d.event.StartHash(key, length, expiry, d.info, typ)
     for i := int64(0); i < length; i++ {
         field, err := readZiplistEntry(buf)
         if err != nil {
@@ -1515,7 +1531,7 @@ func lzfDecompress(in []byte, outlen int) []byte {
 }
 
 // 这是 Redis7.4 最新的功能，即为 Hash 中的每个 Field 单独设置过期时间。想想确实有用，以前都是只有整个 Hash key 的过期时间
-func (d *decode) readHashTtl(key []byte, expiry int64, isPre bool) error {
+func (d *decode) readHashTtl(key []byte, expiry int64, isPre bool, typ string) error {
     rd := d.r
     var minExpire int64
     //var expireAt int64
@@ -1529,7 +1545,7 @@ func (d *decode) readHashTtl(key []byte, expiry int64, isPre bool) error {
         return errors.Trace(err)
     }*/
     d.info.Encoding = "hashtable" //临时处理
-    d.event.StartHash(key, int64(size/2), expiry, d.info)
+    d.event.StartHash(key, int64(size/2), expiry, d.info, typ)
     for i := 0; i < int(size); i++ {
         // Value is absolute for 7.4RC
         expireAt := int64(structure.ReadLength(rd))
@@ -1569,7 +1585,7 @@ func (d *decode) readHashTtl(key []byte, expiry int64, isPre bool) error {
     return nil
 }
 
-func (d *decode) readHashListPackTtl(key []byte, expiry int64, isPre bool) error {
+func (d *decode) readHashListPackTtl(key []byte, expiry int64, isPre bool, typ string) error {
     rd := d.r
     if !isPre {
         // read minExpire
@@ -1579,7 +1595,7 @@ func (d *decode) readHashListPackTtl(key []byte, expiry int64, isPre bool) error
     size := len(list)
 
     d.info.Encoding = "hashtable" //临时处理
-    d.event.StartHash(key, int64(size/3), expiry, d.info)
+    d.event.StartHash(key, int64(size/3), expiry, d.info, typ)
 
     for i := 0; i < size; i += 3 {
         fieldStr := list[i]

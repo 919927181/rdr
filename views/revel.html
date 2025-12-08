@@ -25,6 +25,7 @@
         </section>
     </div>
 
+
     <!--len level 数量、内存分析-->
     <div class="col-md-3">
         <section class="content-header">
@@ -77,32 +78,34 @@
         </section>
     </div>
 
-    <!--top100 最大keys-->
+    <!--top100 最大keys -->
     <div class="col-md-7">
         <section class="content-header">
             <div class="box">
                 <div class="box-body">
-                    <center><strong>top 100 bigkey(按内存)</strong></center><br>
+                    <center><strong>top 100 bigkey (按内存)</strong></center><br>
                     <table class="table table-condensed table-hover sortable" style="word-break:break-all; word-wrap:break-all;">
                         <thead>
-                            <tr>
+                            <tr style="background-color:#f1f1f1;" align="center">
                                 <td class="sorttable_alpha"> Key </td>
-                                <td class="sorttable_alpha" style="width:32px !important;"> Db </td>
-                                <td class="sorttable_alpha" style="width:80px !important;"> Type </td>
-                                <td class="sorttable_alpha" style="width:120px !important;"> Encoding </td>
-                                <td class="sorttable_alpha" style="width:80px !important;"> 占用内存 </td>
+                                <td class="sorttable_alpha" style="width:80px !important;" align="left"> Type </td>
+                                <td class="sorttable_alpha" style="width:110px !important;" align="left"> Encoding </td>
+                                <td class="sorttable_alpha" style="width:100px !important;"> 占用内存 </td>
                                 <td class="sorttable_numeric"> 元素数量 </td>
+                                <td class="sorttable_alpha" style="width:130px !important;"> 过期时间 </td>
+                                <td class="sorttable_alpha" style="width:32px !important;"> Db </td>
                             </tr>
                         </thead>
                         <tbody>
                             {{range $entry := .LargestKeys}}
                             <tr>
-                                <td>{{$entry.Key}}</td>
-                                <td>{{$entry.Db}}</td>
+                                <td class="limited-width">{{$entry.Key}}</td>
                                 <td>{{$entry.Type}}</td>
                                 <td>{{$entry.Encoding}}</td>
-                                <td>{{humanizeBytes $entry.Bytes}}</td>
-                                <td>{{humanizeComma $entry.NumOfElem}}</td>
+                                <td align="right">{{humanizeBytes $entry.Bytes}}</td>
+                                <td align="right">{{humanizeComma $entry.NumOfElem}}</td>
+                                <td style="font-size:11.5px !important;" align="center">{{$entry.Expiration}}</td>
+                                <td>{{$entry.Db}}</td>
                             </tr>
                             {{end}}
                         </tbody>
@@ -112,7 +115,7 @@
         </section>
     </div>
 
-    <!--Key前缀（按数量）分析-->
+    <!-- Key前缀（按数量）分析 -->
     <div class="col-md-5">
         <section class="content-header">
             <div class="box">
@@ -131,18 +134,18 @@
                                     <thead>
                                         <tr>
                                             <td class="sorttable_alpha"> KeyPrefix </td>
-                                            <td class="sorttable_alpha" style="width:32px !important;"> Db </td>
                                             <td class="sorttable_alpha" style="width:80px !important;"> Bytes </td>
                                             <td class="sorttable_numeric"> NumberOfKey </td>
+                                            <td class="sorttable_alpha" style="width:32px !important;"> Db </td>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {{range $entry := $entries}}
-                                        <tr>
-                                            <td>{{$entry.Key}}</td>
-                                            <td>{{$entry.Db}}</td>
+                                        <tr style="background-color:#f1f1f1;">
+                                            <td class="limited-width">{{$entry.Key}}</td>
                                             <td>{{humanizeBytes $entry.Bytes}}</td>
                                             <td>{{humanizeComma $entry.Num}}</td>
+                                            <td>{{$entry.Db}}</td>
                                         </tr>
                                         {{end}}
                                     </tbody>
@@ -155,4 +158,90 @@
             </div>
         </section>
     </div>
+
+    <!--
+    <div class="col-md-12">
+        <section class="content-header">
+            <div class="box">
+                <div class="box-body">
+                    <div class="nav-tabs-custom">
+                        <ul class="nav nav-tabs nav-justified">
+                            <li class="active"><a href="#type-bigkey" data-toggle="tab" aria-expanded="true"><strong>top 100 bigkey (按内存)</strong>></a></li>
+                            <li class=""><a href="#type-prefixkey" data-toggle="tab" aria-expanded="false"><strong>count by key prefix</strong></a></li>
+                        </ul>
+                        <div class="tab-content panel-body">
+
+                            <div id="type-bigkey" class="tab-pane active">
+                                <table class="table table-condensed table-hover sortable" style="word-break:break-all; word-wrap:break-all;">
+                                    <thead>
+                                        <tr style="background-color:#f1f1f1;" align="center">
+                                            <td class="sorttable_alpha" align="center"> Key </td>
+                                            <td class="sorttable_alpha" style="width:80px !important;" align="left"> Type </td>
+                                            <td class="sorttable_alpha" style="width:120px !important;" align="left"> Encoding </td>
+                                            <td class="sorttable_alpha" style="width:100px !important;"> 占用内存 </td>
+                                            <td class="sorttable_numeric" style="width:150px !important;"> 元素数量 </td>
+                                            <td class="sorttable_alpha" style="width:130px !important;"> 过期时间 </td>
+                                            <td class="sorttable_alpha" style="width:32px !important;"> Db </td>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {{range $entry := .LargestKeys}}
+                                        <tr>
+                                            <td class="limited-width">{{$entry.Key}}</td>
+                                            <td>{{$entry.Type}}</td>
+                                            <td>{{$entry.Encoding}}</td>
+                                            <td align="right">{{humanizeBytes $entry.Bytes}}</td>
+                                            <td align="right">{{humanizeComma $entry.NumOfElem}}</td>
+                                            <td style="font-size:11.5px !important;" align="center">{{$entry.Expiration}}</td>
+                                            <td>{{$entry.Db}}</td>
+                                        </tr>
+                                        {{end}}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div id="type-prefixkey" class="tab-pane">
+                                        <div class="nav-tabs-custom">
+                                            <ul class="nav nav-tabs nav-justified">
+                                                {{range $type, $entries := .LargestKeyPrefixes}}
+                                                <li {{if isFirst}} class="active" {{end}}><a href="#type-{{$type}}" data-toggle="tab">{{$type}}</a></li>
+                                                {{end}} {{$null :=clearFirst}}
+                                            </ul>
+                                            <div class="tab-content panel-body">
+                                                {{range $type, $entries := .LargestKeyPrefixes}}
+                                                <div id="type-{{$type}}" class="tab-pane {{if isFirst}}active{{end}}">
+                                                    <table class="table table-condensed table-hover sortable" style="word-break:break-all; word-wrap:break-all;">
+                                                        <thead>
+                                                            <tr style="background-color:#f1f1f1;">
+                                                                <td class="sorttable_alpha"> KeyPrefix </td>
+                                                                <td class="sorttable_alpha" style="width:100px !important;"> Bytes </td>
+                                                                <td class="sorttable_numeric"> NumberOfKey </td>
+                                                                <td class="sorttable_alpha" style="width:32px !important;"> Db </td>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {{range $entry := $entries}}
+                                                            <tr>
+                                                                <td class="limited-width">{{$entry.Key}}</td>
+                                                                <td>{{humanizeBytes $entry.Bytes}}</td>
+                                                                <td>{{humanizeComma $entry.Num}}</td>
+                                                                <td>{{$entry.Db}}</td>
+                                                            </tr>
+                                                            {{end}}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                {{end}} {{$null :=clearFirst}}
+                                            </div>
+                                        </div>
+                            </div>
+
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>-->
+
 </div>

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/919927181/rdb"
 	"github.com/919927181/rdb/nopdecoder"
@@ -33,6 +34,7 @@ type Entry struct {
     FieldOfLargestElem string
     Db                 int
     Encoding           string
+	Expiration         string
 }
 
 // Decoder decode rdb file
@@ -110,6 +112,11 @@ func (d *Decoder) StartStream(key []byte, cardinality, expiry int64, info *rdb.I
     bytes += d.m.StreamOverhead()
     bytes += d.m.SizeofStreamRadixTree(uint64(cardinality))
 
+	expiryStr := ""
+	if expiry > 0 {
+		expiryStr = time.Unix(0, expiry*int64(time.Millisecond)).Format("2006-01-02 15:04:05")
+	}
+
     d.currentInfo = info
     d.currentEntry = &Entry{
         Key:              keyStr,
@@ -118,6 +125,7 @@ func (d *Decoder) StartStream(key []byte, cardinality, expiry int64, info *rdb.I
         Encoding:         info.Encoding,
         NumOfElem:        0,
         LenOfLargestElem: 0,
+		Expiration:       expiryStr,
         Db:               d.Db,
     }
 }
@@ -151,12 +159,18 @@ func (d *Decoder) Set(key, value []byte, expiry int64, info *rdb.Info) {
     bytes := d.m.TopLevelObjOverhead(key, expiry)
     bytes += d.m.SizeofString(value)
 
+	expiryStr := ""
+	if expiry > 0 {
+		expiryStr = time.Unix(0, expiry*int64(time.Millisecond)).Format("2006-01-02 15:04:05")
+	}
+
     e := &Entry{
         Key:       keyStr,
         Bytes:     bytes,
         Type:      "string",
         Encoding:  info.Encoding,
         NumOfElem: d.m.ElemLen(value),
+		Expiration: expiryStr,
         Db:        d.Db,
     }
     d.Entries <- e
@@ -166,7 +180,7 @@ func (d *Decoder) Set(key, value []byte, expiry int64, info *rdb.Info) {
 
 // StartHash is called at the beginning of a hash.
 // Hset will be called exactly length times before EndHash.
-func (d *Decoder) StartHash(key []byte, length, expiry int64, info *rdb.Info) {
+func (d *Decoder) StartHash(key []byte, length, expiry int64, info *rdb.Info, typ string) {
     keyStr := string(key)
 
     bytes := d.m.TopLevelObjOverhead(key, expiry)
@@ -183,13 +197,19 @@ func (d *Decoder) StartHash(key []byte, length, expiry int64, info *rdb.Info) {
         panic(fmt.Sprintf("unexpected size(0) or encoding:%s", info.Encoding))
     }
 
+	expiryStr := ""
+	if expiry > 0 {
+		expiryStr = time.Unix(0, expiry*int64(time.Millisecond)).Format("2006-01-02 15:04:05")
+	}
+
     d.currentInfo = info
     d.currentEntry = &Entry{
         Key:       keyStr,
         Bytes:     bytes,
-        Type:      "hash",
+        Type:      typ,
         Encoding:  info.Encoding,
         NumOfElem: uint64(length),
+		Expiration: expiryStr,
         Db:        d.Db,
     }
 }
@@ -222,8 +242,8 @@ func (d *Decoder) EndHash(key []byte) {
 
 // StartSet is called at the beginning of a set.
 // Sadd will be called exactly cardinality times before EndSet.
-func (d *Decoder) StartSet(key []byte, cardinality, expiry int64, info *rdb.Info) {
-    d.StartHash(key, cardinality, expiry, info)
+func (d *Decoder) StartSet(key []byte, cardinality, expiry int64, info *rdb.Info, typ string) {
+    d.StartHash(key, cardinality, expiry, info, typ)
 }
 
 // Sadd is called once for each member of a set.
@@ -260,6 +280,11 @@ func (d *Decoder) StartList(key []byte, length, expiry int64, info *rdb.Info) {
     d.currentInfo = info
     bytes := d.m.TopLevelObjOverhead(key, expiry)
 
+	expiryStr := ""
+	if expiry > 0 {
+		expiryStr = time.Unix(0, expiry*int64(time.Millisecond)).Format("2006-01-02 15:04:05")
+	}
+
     //bug here length would be -1 if it is quicklist
     //bytes += d.m.RobjOverHead() * uint64(length)
     d.currentEntry = &Entry{
@@ -268,6 +293,7 @@ func (d *Decoder) StartList(key []byte, length, expiry int64, info *rdb.Info) {
         Type:      "list",
         Encoding:  info.Encoding,
         NumOfElem: 0,
+		Expiration: expiryStr,
         Db:        d.Db,
     }
 }
@@ -354,12 +380,18 @@ func (d *Decoder) StartZSet(key []byte, cardinality, expiry int64, info *rdb.Inf
         panic(fmt.Sprintf("unexpected size(0) or encoding:%s", info.Encoding))
     }
 
+	expiryStr := ""
+	if expiry > 0 {
+		expiryStr = time.Unix(0, expiry*int64(time.Millisecond)).Format("2006-01-02 15:04:05")
+	}
+
     d.currentEntry = &Entry{
         Key:       keyStr,
         Bytes:     bytes,
         Type:      "sortedset",
         Encoding:  info.Encoding,
         NumOfElem: uint64(cardinality),
+		Expiration: expiryStr,
         Db:        d.Db,
     }
 }
