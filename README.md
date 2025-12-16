@@ -19,12 +19,12 @@ This repository is fork  from github.com/xueqiu/rdr.  The requrie rdb file parse
 在此，对原开源作者，以及提供灵感、pr的朋友们表示感谢。
 
 
-## Redis Version Support（redis 版本支持）
+## Support For Redis（redis 版本支持）
 
 支持redis rdb 文件版本为 1 <= version <= 12
 
-  - RDR V1.x 支持 Redis6（redis 5.x ~ 6.x ，rdb 的版本是 9 ) 
-  - RDR V2.x 支持 Redis7.0+（rdb 文件版本 10~12，mysql8.0的rdb版本是12）
+  - RDR V1.0.3 支持 Redis6（redis 5.x ~ 6.x ，rdb的版本是 9 ) 
+  - RDR V1.0.5 支持 Redis7.0+（rdb文件版本10~12，mysql8.0的rdb版本是12）
   
  备注：
   - 针对redis7+版本，rdb文件解析主要是解决listpack数据类型问题。鉴于 redis stream 用于消息队列，我们通常不用redis作为mq，因此stream增加的类型未处理。  
@@ -44,7 +44,7 @@ This repository is fork  from github.com/xueqiu/rdr.  The requrie rdb file parse
      - 将2021年3月 至 2023年7月，在原作者 github.com/xueqiu/rdr/pulls，除过滤小key外的其他pulls，均同步过来、并解决完毕。
 	 - 遗留问题： redis3.2+新引入的encoding为quicklist作为list的基础类型，list的元素个数是个超大数字，在分析时可能溢出
 	 
-   - v2.x 
+   - v1.0.5 
      - 支持redis7,主要解决了redis7.x底层存储类型使用listpack替代ziplist的解析问题。
 
 
