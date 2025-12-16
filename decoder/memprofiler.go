@@ -163,6 +163,10 @@ func (m *MemProfiler) QuickListOverHead(size uint64) uint64 {
     return quicklist + size*quickitem
 }
 
+func (m *MemProfiler) QuickList2OverHead() uint64 {
+    return 2*pointerSize + 2*8 + 2*4
+}
+
 // get memory use of a Quicklist2 参考 github.com/hdt3213/rdb/memprofiler
 /*func (m *MemProfiler) sizeOfQuicklist2(values [][]byte, detail *model.Quicklist2Detail) uint64 {
     size := 2*pointerSize + 2*8 + 2*4
@@ -183,6 +187,10 @@ func (m *MemProfiler) QuickListOverHead(size uint64) uint64 {
     return size
 }*/
 
+func (m *MemProfiler) ListPackEntryOverHead() uint64 {
+    // listpack overhead: <total_bytes><size>...<end>
+    return 4 + 2 + 1
+}
 
 func (m *MemProfiler) ZipListHeaderOverHead() uint64 {
     return 4 + 4 + 2 + 1
@@ -247,6 +255,7 @@ func (m *MemProfiler) KeyExpiryOverhead(expiry int64) uint64 {
 //        int refcount;
 //        void *ptr;
 //    } robj;
+//在 Redis 的底层实现中，每个键值对都对应一个 redisObject 结构，该结构包含一个 lru 字段，用于记录对象最后一次被访问的时间戳。‌默认值是 24 个比特位
 const LRU_BITS = 24
 
 func (m *MemProfiler) RobjOverHead() uint64 {

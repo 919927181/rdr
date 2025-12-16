@@ -1,5 +1,5 @@
-github.com/919927181/rdb v1.0.4-0.20251205063519-de0af48122ff h1:i+JgKLOj+VgoCGi87sfR3b61s10bB0CRBnr+fGX63UQ=
-github.com/919927181/rdb v1.0.4-0.20251205063519-de0af48122ff/go.mod h1:2WzQWuBgB4JtoazaK5kRaCLT3tjo85/fYXR5jCYMCsg=
+github.com/919927181/rdb v1.0.4 h1:bw6AUGaQ8XjHYdtIP3SH6Rvfk3lWfA5E2o80oQQXnP4=
+github.com/919927181/rdb v1.0.4/go.mod h1:2WzQWuBgB4JtoazaK5kRaCLT3tjo85/fYXR5jCYMCsg=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/coreos/go-systemd/v22 v22.5.0/go.mod h1:Y58oyj3AT4RCenI/lSvhwexgC+NSVTIJ3seZv2GcEnc=
 github.com/cpuguy83/go-md2man/v2 v2.0.0-20190314233015-f79a8a8ca69d/go.mod h1:maD7wRr/U5Z6m/iR4s+kqSMx2CaBsrgA7czyZG/E6dU=

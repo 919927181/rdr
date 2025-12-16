@@ -2,6 +2,7 @@ package structure
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"math"
 	"strconv"
@@ -42,7 +43,7 @@ const (
 func ReadListpack(rd io.Reader) []string {
     rd = bufio.NewReader(strings.NewReader(ReadString(rd)))
 
-    _ = ReadUint32(rd) // bytes
+    _ = ReadUint32(rd) // bytes，即内存占用
     size := int(ReadUint16(rd))
     var elements []string
     for i := 0; i < size; i++ {
@@ -54,6 +55,28 @@ func ReadListpack(rd io.Reader) []string {
         log.Panicf("ReadListpack: last byte is not 0xFF, but [%d]", lastByte)
     }
     return elements
+}
+
+// 返回listpack类型的bytes，用于rdb计算内存占用
+func ReadListpack2(rd io.Reader)([]string, uint32) {
+    rd = bufio.NewReader(strings.NewReader(ReadString(rd)))
+
+    //_ = ReadUint32(rd) // bytes，即内存占用，
+    bytes := ReadUint32(rd)
+	// 调试
+	fmt.Printf("value use memory  %d\n", bytes)
+
+    size := int(ReadUint16(rd))
+    var elements []string
+    for i := 0; i < size; i++ {
+        ele := readListpackEntry(rd)
+        elements = append(elements, ele)
+    }
+    lastByte := ReadByte(rd)
+    if lastByte != 0xFF {
+        log.Panicf("ReadListpack: last byte is not 0xFF, but [%d]", lastByte)
+    }
+    return elements, bytes
 }
 
 // redis/src/Listpack.c lpGet()

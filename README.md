@@ -13,26 +13,28 @@ RDR (redis data Reveal) is a tool for offline analysis of redis rdb files. Throu
 
 This repository is fork  from github.com/xueqiu/rdr.  The requrie rdb file parse is github.com/dongmx/rdb ，in this project has been replaced  github.com/919927181/rdb
 
-- 本项目基于 xueqiu/rdr 开源项目开发，xueqiu/rdr是雪球公司基于redis-rdb-tool开源项目开发的，它于 2019 年 10 月 9 日后，未再更新维护。
-- 核心依赖 919927181/rdb（基于dongmx/rdb）解析redis rdb 文件。
+- 本项目基于 xueqiu/rdr 开源项目开发，而xueqiu/rdr是雪球公司基于redis-rdb-tool开源项目开发的，更新维护停止在 2019 年 10 月 9 日。
+- 核心依赖包 919927181/rdb（基于dongmx/rdb）解析redis rdb 文件。
 
 在此，对原开源作者，以及提供灵感、pr的朋友们表示感谢。
 
 
 ## Redis Version Support（redis 版本支持）
 
- - RDR V1.x 支持 Redis6（redis 5.x ~ 6.x ，rdb 的版本是 9 ) 
- - RDR V2.x 支持 Redis7.0+（rdb 文件版本 10~12，mysql8.0的rdb版本是12）
+支持redis rdb 文件版本为 1 <= version <= 12
+
+  - RDR V1.x 支持 Redis6（redis 5.x ~ 6.x ，rdb 的版本是 9 ) 
+  - RDR V2.x 支持 Redis7.0+（rdb 文件版本 10~12，mysql8.0的rdb版本是12）
   
  备注：
-  - 针对redis7、8版本，rdb文件解析主要是解决listpack数据类型问题。鉴于 redis stream 用于消息队列，我们通常不用redis作为mq，因此stream增加的类型未处理。  
+  - 针对redis7+版本，rdb文件解析主要是解决listpack数据类型问题。鉴于 redis stream 用于消息队列，我们通常不用redis作为mq，因此stream增加的类型未处理。  
   - RDR的核心依赖是 rdb 文件解析，不同版本的 redis，其 rdb 文件存在差异，也会增加新的数据类型，存在数据兼容性问题。
-  - 如果出现不错误，可以尝试通过 RedisShake 数据迁移工具，将redis7 RDB数据迁移到redis6下，然后再用rdr\进行分析。
+    - 如果解析高版本的redis时出现错误，可以尝试通过 RedisShake 数据迁移工具，将redis7 RDB数据迁移到redis6下，然后再用rdr\进行分析。
 
 
 ## Change（变更）
 - caiqing0204：增加了key所属DB，这样可以更直观的查看key元信息。
-- 泰山李工（我）：
+- 泰山李工（Me）：
    - v1.0.2
      - 将依赖 github.com/dongmx/rdb 中的rdbVersion 由9改成20【2025-11-08】
      - 修改html布局、将标题英文改为中文 【2025-11-08】
@@ -133,7 +135,26 @@ portfolio:stock_follower:ZH924804
 portfolio:stock_follower_count:INS104806
 ```
 
-## develop (rdr 开发）
+## 常见问题
+
+Q：为什么使用命令（memory usage ）获取的和rdr算的总是不一致
+A：Key和value所对应的struct和指针大小。在jemalloc分配后，字节对齐部分所占用的大小也会计算在used_memory中
+   无论是用命令还是rdr都计算了这两块，为什么不一致？可读下 https://blog.csdn.net/f80407515/article/details/122387859
+
+Q：如何处理报错decode rdbfile error: rdb: unknown object type 116 for key？
+A：该报错表示实例中存在非标准或新版本增加的数据结构，暂不支持分析，你可以在还原到测试实例删除后再进行分析。
+
+Q：为什么Redis缓存分析中String类型Key的元素数量和元素长度是一样的？
+A：在Redis缓存分析中，针对String类型的Key，其元素数量就是其元素长度。
+
+Q：Redis缓存分析的前缀分隔符是什么？
+A：目前Redis缓存分析的前缀分隔符是按照固定的前缀:;,_-+@=|# 区分的字符串。
+
+Q：各key的内存占用为什么比[HDT3213/rdb](https://github.com/HDT3213/rdb)算的大28？
+A：HDT3213/rdb V.1.3.0没有计算lru_bits占用，lru_bits默认占用24比特位，而本工具将起计算在内了，请看源码d.m.TopLevelObjOverhead。
+
+
+## RDR 开发
 
 1. 文件目录结构
 
@@ -158,7 +179,7 @@ portfolio:stock_follower_count:INS104806
 
     你需要安装go-bindata，安装手册可参考 https://blog.csdn.net/qq_67017602/article/details/130742316
 
-3. 运行
+4. 打包
    
 ```
  1.如果改动了静态资源（css\js\html），需要使用go-bindata将静态资源文件嵌入到go文件里
@@ -173,12 +194,12 @@ portfolio:stock_follower_count:INS104806
  ```
 
 
-4. 构建，输出linu下的可执行文件
+5. 构建，输出linu下的可执行文件
 
 见上面的Usage（使用）
 
 
-## develop  （rdb 开发）
+## RDB 开发
 
  rdr工具的核心部分就是rdb文件解析，作为开发者，我们可以通过以下几个途径来掌握相关知识：
 
@@ -202,11 +223,21 @@ portfolio:stock_follower_count:INS104806
    - redis7.x底层存储类型使用listpack替代ziplist。例如，若List大小超过阈值（list-max-listpack-size），Redis会切换为ziplist或quicklist编码
 
 
-## 交流群/联系我
+## 贡献
 
-添加微信（Sd-LiYanJing），备注GitHub，即可进群
+欢迎来自各界的贡献。对于重大变更，请先开一个 issue 来讨论你想要改变的内容。如果想共同维护此项目，请加我微信（Sd-LiYanJing）。
 
-注：请阅读我的帖子 [《redis内存离线分析工具选型》](https://mp.weixin.qq.com/s/h7YJd0dVui0FqJLkG8RXxQ)
+特别感兴趣的是：
+
+ 1. 随着redis版本变化，增加新类型的读解析支持
+ 2. 优化、改善代码，提升性能
+ 
+
+## 交流群
+
+添加微信（Sd-LiYanJing），备注GitHub-rdr，即可进群
+
+注：如果本工具对您有所帮助，请动动发财的小手，给项目点个赞（点击 Star ），您的一票，是对我们最大的支持！
 
 
 ## License

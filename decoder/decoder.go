@@ -180,20 +180,16 @@ func (d *Decoder) Set(key, value []byte, expiry int64, info *rdb.Info) {
 
 // StartHash is called at the beginning of a hash.
 // Hset will be called exactly length times before EndHash.
-func (d *Decoder) StartHash(key []byte, length, expiry int64, info *rdb.Info, typ string) {
+func (d *Decoder) StartHash(key []byte, length, expiry int64, info *rdb.Info) {
     keyStr := string(key)
 
     bytes := d.m.TopLevelObjOverhead(key, expiry)
 
-    if info.SizeOfValue > 0 {
-        bytes += uint64(info.SizeOfValue)
-    } else if info.Encoding == "hashtable" {
+    if info.Encoding == "hashtable" {
         bytes += d.m.HashTableOverHead(uint64(length))
-    } else if info.Encoding == "hashtablepack" {
-        bytes += 0 //临时解决，后期再写计算方法
-    } else if info.Encoding == "setlistpack" {
-        bytes += 0 //临时解决，后期再写计算方法
-    }else {
+    } else if info.Encoding == "listpack" &&  info.SizeOfValue > 0 {
+		bytes += uint64(info.SizeOfValue)
+    } else {
         panic(fmt.Sprintf("unexpected size(0) or encoding:%s", info.Encoding))
     }
 
@@ -206,7 +202,7 @@ func (d *Decoder) StartHash(key []byte, length, expiry int64, info *rdb.Info, ty
     d.currentEntry = &Entry{
         Key:       keyStr,
         Bytes:     bytes,
-        Type:      typ,
+        Type:      "hash",
         Encoding:  info.Encoding,
         NumOfElem: uint64(length),
 		Expiration: expiryStr,
@@ -223,13 +219,13 @@ func (d *Decoder) Hset(key, field, value []byte) {
         e.FieldOfLargestElem = string(field)
         e.LenOfLargestElem = lenOfElem
     }
-    // 临时解决hashtablepack
-    if d.currentInfo.Encoding == "hashtable"  || d.currentInfo.Encoding == "hashtablepack" {
+    // StartHash中listpack类型的大小是整个的，包含了key和所有内部元素的大小
+    if d.currentInfo.Encoding == "hashtable" {
         e.Bytes += d.m.SizeofString(field)
         e.Bytes += d.m.SizeofString(value)
         e.Bytes += d.m.HashTableEntryOverHead()
 
-        if d.rdbVer < 16 {
+        if d.rdbVer < 10 {
             e.Bytes += 2 * d.m.RobjOverHead()
         }
     }
@@ -242,8 +238,39 @@ func (d *Decoder) EndHash(key []byte) {
 
 // StartSet is called at the beginning of a set.
 // Sadd will be called exactly cardinality times before EndSet.
-func (d *Decoder) StartSet(key []byte, cardinality, expiry int64, info *rdb.Info, typ string) {
-    d.StartHash(key, cardinality, expiry, info, typ)
+func (d *Decoder) StartSet(key []byte, cardinality, expiry int64, info *rdb.Info) {
+      //d.StartHash(key, cardinality, expiry, info)
+
+		keyStr := string(key)
+		bytes := d.m.TopLevelObjOverhead(key, expiry)
+
+        //IntSetEncoding
+		if info.Encoding == "intset"  && info.SizeOfValue > 0 {
+            bytes += uint64(info.SizeOfValue)
+		} else if info.Encoding == "hashtable" {
+			bytes += d.m.HashTableOverHead(uint64(cardinality))
+		} else if info.Encoding == "listpack" &&  info.SizeOfValue > 0 {
+			bytes += uint64(info.SizeOfValue)
+		}else {
+			panic(fmt.Sprintf("unexpected size(0) or encoding:%s", info.Encoding))
+		}
+
+		expiryStr := ""
+		if expiry > 0 {
+			expiryStr = time.Unix(0, expiry*int64(time.Millisecond)).Format("2006-01-02 15:04:05")
+		}
+
+		d.currentInfo = info
+		d.currentEntry = &Entry{
+			Key:       keyStr,
+			Bytes:     bytes,
+			Type:      "set",
+			Encoding:  info.Encoding,
+			NumOfElem: uint64(cardinality),
+			Expiration: expiryStr,
+			Db:        d.Db,
+		}
+
 }
 
 // Sadd is called once for each member of a set.
@@ -254,12 +281,12 @@ func (d *Decoder) Sadd(key, member []byte) {
         e.FieldOfLargestElem = string(member)
         e.LenOfLargestElem = lenOfElem
     }
-    // 待解决setlistpack
+    // StartSet中非hashtable类型的都是加的整个key的大小（包含了key和所有内部元素的大小）
     if d.currentInfo.Encoding == "hashtable" {
         e.Bytes += d.m.SizeofString(member)
         e.Bytes += d.m.HashTableEntryOverHead()
 
-        if d.rdbVer < 16 {
+        if d.rdbVer < 10 {
             e.Bytes += d.m.RobjOverHead()
         }
     }
@@ -284,6 +311,9 @@ func (d *Decoder) StartList(key []byte, length, expiry int64, info *rdb.Info) {
 	if expiry > 0 {
 		expiryStr = time.Unix(0, expiry*int64(time.Millisecond)).Format("2006-01-02 15:04:05")
 	}
+
+    //bug here length would be -4 if it is quicklist2
+	//bytes += d.m.QuickList2OverHead() + (d.m.RobjOverHead() * uint64(length))
 
     //bug here length would be -1 if it is quicklist
     //bytes += d.m.RobjOverHead() * uint64(length)
@@ -319,12 +349,17 @@ func (d *Decoder) Rpush(key, value []byte) {
         e.Bytes += d.m.LinkedListEntryOverHead()
         e.Bytes += sizeInlist
 
-        if d.rdbVer < 16 {
+        if d.rdbVer < 10 {
             e.Bytes += d.m.RobjOverHead()
         }
 
     case "quicklist2":
-        e.Bytes += 0  //临时不计算内存使用情况。后期写计算方法时可参考 github.com/hdt3213/rdb/memprofiler
+		if _, err := strconv.ParseInt(string(value), 10, 32); err != nil {
+			e.Bytes += d.m.SizeofString(value)  //参考 github.com/hdt3213/rdb/memprofiler
+        }
+
+    case "listpack":
+        e.Bytes +=0
 
     default:
         panic(fmt.Sprintf("unknown encoding:%s", d.currentInfo.Encoding))
@@ -353,7 +388,18 @@ func (d *Decoder) EndList(key []byte) {
         e.Bytes += d.m.LinkedListOverHead()
 
     case "quicklist2":
-        e.Bytes += 0   //临时不计算内存使用情况。后期写计算方法时可参考 github.com/hdt3213/rdb/memprofiler
+        e.Bytes += 0   //已加到startlist中。后期写计算方法时可参考 github.com/hdt3213/rdb/memprofiler
+
+	case "listpack":
+		e.Bytes += d.m.QuickList2OverHead()
+		e.Bytes += d.m.RobjOverHead() * d.currentInfo.Zips
+		//fmt.Printf("2、quicklist2 OverHead use memory  %d for string key %s\n", int(d.m.QuickList2OverHead() + d.m.RobjOverHead() * d.currentInfo.Zips), string(key))
+
+		if d.currentInfo.SizeOfValue >0 {
+			e.Bytes += uint64(d.currentInfo.SizeOfValue)
+			//fmt.Printf("3、SizeOfValue use memory  %d for string key %s\n", uint64(d.currentInfo.SizeOfValue), string(key))
+		}
+
 
     default:
         panic(fmt.Sprintf("unknown encoding:%s", d.currentInfo.Encoding))
@@ -370,12 +416,12 @@ func (d *Decoder) StartZSet(key []byte, cardinality, expiry int64, info *rdb.Inf
     bytes := d.m.TopLevelObjOverhead(key, expiry)
     d.currentInfo = info
 
-    if info.SizeOfValue > 0 {
-        bytes += uint64(info.SizeOfValue)
+	if info.Encoding == "ziplist"  && info.SizeOfValue > 0 {
+		bytes += uint64(info.SizeOfValue)
     } else if info.Encoding == "skiplist" {
         bytes += d.m.SkipListOverHead(uint64(cardinality))
-    } else if info.Encoding == "zsetlistpack" {
-        bytes += 0 //临时，稍后写计算方法
+	} else if info.Encoding == "listpack" &&  info.SizeOfValue > 0 {
+		bytes += uint64(info.SizeOfValue)
     } else {
         panic(fmt.Sprintf("unexpected size(0) or encoding:%s", info.Encoding))
     }
@@ -388,7 +434,7 @@ func (d *Decoder) StartZSet(key []byte, cardinality, expiry int64, info *rdb.Inf
     d.currentEntry = &Entry{
         Key:       keyStr,
         Bytes:     bytes,
-        Type:      "sortedset",
+        Type:      "sortedset", //Sorted Set 和 zset 指的是同一个东西
         Encoding:  info.Encoding,
         NumOfElem: uint64(cardinality),
 		Expiration: expiryStr,
@@ -404,13 +450,13 @@ func (d *Decoder) Zadd(key []byte, score float64, member []byte) {
         e.FieldOfLargestElem = string(member)
         e.LenOfLargestElem = lenOfElem
     }
-    // 临时解决zsetlistpack
-    if d.currentInfo.Encoding == "skiplist" || d.currentInfo.Encoding == "zsetlistpack" {
+    // StartZSet中，仅skiplist类型加了SkipListOverHead，其他类型都是加的整个类型的bytes，包含了key和所有内部元素的大小
+    if d.currentInfo.Encoding == "skiplist" {
         e.Bytes += 8 // sizeof(score)
         e.Bytes += d.m.SizeofString(member)
         e.Bytes += d.m.SkipListEntryOverHead()
 
-        if d.rdbVer < 16 {
+        if d.rdbVer < 10 {
             e.Bytes += d.m.RobjOverHead()
         }
     }
