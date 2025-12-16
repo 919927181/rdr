@@ -83,7 +83,7 @@
         <section class="content-header">
             <div class="box">
                 <div class="box-body">
-                    <center><strong>top 100 bigkey (按内存)</strong></center><br>
+                    <center><strong>top 200 bigkey (按内存)</strong></center><br>
                     <table class="table table-condensed table-hover sortable" style="word-break:break-all; word-wrap:break-all;">
                         <thead>
                             <tr style="background-color:#f1f1f1;" align="center">
@@ -132,7 +132,7 @@
                             <div id="type-{{$type}}" class="tab-pane {{if isFirst}}active{{end}}">
                                 <table class="table table-condensed table-hover sortable" style="word-break:break-all; word-wrap:break-all;">
                                     <thead>
-                                        <tr>
+                                        <tr style="background-color:#f1f1f1;">
                                             <td class="sorttable_alpha"> KeyPrefix </td>
                                             <td class="sorttable_alpha" style="width:80px !important;"> Bytes </td>
                                             <td class="sorttable_numeric"> NumberOfKey </td>
@@ -141,7 +141,7 @@
                                     </thead>
                                     <tbody>
                                         {{range $entry := $entries}}
-                                        <tr style="background-color:#f1f1f1;">
+                                        <tr>
                                             <td class="limited-width">{{$entry.Key}}</td>
                                             <td>{{humanizeBytes $entry.Bytes}}</td>
                                             <td>{{humanizeComma $entry.Num}}</td>

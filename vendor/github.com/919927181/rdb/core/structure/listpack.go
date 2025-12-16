@@ -2,7 +2,6 @@ package structure
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"math"
 	"strconv"
@@ -64,7 +63,7 @@ func ReadListpack2(rd io.Reader)([]string, uint32) {
     //_ = ReadUint32(rd) // bytes，即内存占用，
     bytes := ReadUint32(rd)
 	// 调试
-	fmt.Printf("value use memory  %d\n", bytes)
+	//fmt.Printf("value use memory  %d\n", bytes)
 
     size := int(ReadUint16(rd))
     var elements []string

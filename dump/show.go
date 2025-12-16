@@ -48,8 +48,10 @@ func Show(c *cli.Context) {
         return
     }
 
+
     // parse rdbfile
     fmt.Fprintln(c.App.Writer, "start parsing...")
+
     instances := []string{}
     InitHTMLTmpl()
     go func() {
@@ -60,12 +62,15 @@ func Show(c *cli.Context) {
 
                     if !counters.Check(filename) {
                         decoder := decoder.NewDecoder()
+						start_milliseconds := time.Now().UnixMilli()
                         fmt.Fprintf(c.App.Writer, "start to parse %v \n", filename)
                         go Decode(c, decoder, v)
                         counter := NewCounter()
                         counter.Count(decoder.Entries)
                         counters.Set(filename, counter)
-                        fmt.Fprintf(c.App.Writer, "parse %v  done\n", filename)
+						end_milliseconds := time.Now().UnixMilli()
+
+                        fmt.Fprintf(c.App.Writer, "parse %v done, time use %d ms.\n", filename, (end_milliseconds-start_milliseconds) )
 
                         instances = append(instances, filename)
                         // init html template

@@ -86,7 +86,7 @@ func Decode(c *cli.Context, decoder *decoder.Decoder, filepath string) {
 func GetData(filename string, cnt *Counter) map[string]interface{} {
     data := make(map[string]interface{})
     data["CurrentInstance"] = filename
-    data["LargestKeys"] = cnt.GetLargestEntries(100)
+    data["LargestKeys"] = cnt.GetLargestEntries(200) //top 200 bigkey (按内存)
 
     largestKeyPrefixesByType := map[string][]*PrefixEntry{}
     for _, entry := range cnt.GetLargestKeyPrefixes() {
@@ -130,8 +130,8 @@ func GetData(filename string, cnt *Counter) map[string]interface{} {
             Slot: slot, Size: size,
         })
     }
-
-    topN := 100
+    //top 200 bigkey (按内存)
+    topN := 200
     slotBytes := make(slotHeap, 0, topN)
     slotNums := make(slotHeap, 0, topN)
 
