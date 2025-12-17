@@ -17,6 +17,10 @@ import (
 	"github.com/urfave/cli"
 )
 
+/**
+ * @file about: 通过网页显示rdb file的统计信息
+ */
+
 var counters = NewSafeMap()
 
 func listPathFiles(pathname string) []string {

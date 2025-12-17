@@ -14,6 +14,10 @@ import (
 	"github.com/urfave/cli"
 )
 
+/**
+ * @file about: 将统计结果输出到STDOUT 或 File
+ */
+
 // Dump rdb file statistical information
 func Dump(path string) (map[string]interface{}, error) {
     var data map[string]interface{}
@@ -119,8 +123,8 @@ func ToCliWriterToFile(cli *cli.Context) {
     }
 	writer.WriteString("]\n");
 	end_milliseconds := time.Now().UnixMilli()
-	fmt.Println(fmt.Sprintf("parsing finished, result write to file %s.", resultFileName))
-	fmt.Println(fmt.Sprintf("time use %d ms.", (end_milliseconds-start_milliseconds)))
+	fmt.Printf(fmt.Sprintf("parsing finished, result write to file %s.\n", resultFileName))
+	fmt.Printf(fmt.Sprintf("time use %d ms.\n", (end_milliseconds-start_milliseconds)))
 }
 
 // Decode ...

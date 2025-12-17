@@ -13,10 +13,12 @@ RDR (redis data Reveal) is a tool for offline analysis of redis rdb files. Throu
 
 This repository is fork  from github.com/xueqiu/rdr.  The requrie rdb file parse is github.com/dongmx/rdb ，in this project has been replaced  github.com/919927181/rdb
 
-- 本项目基于 xueqiu/rdr 开源项目开发，而xueqiu/rdr是雪球公司基于redis-rdb-tool开源项目开发的，更新维护停止在 2019 年 10 月 9 日。
+- 本项目基于 xueqiu/rdr 开源项目开发，实现了对redis7+的支持。
 - 核心依赖包 919927181/rdb（基于dongmx/rdb）解析redis rdb 文件。
 
-在此，对原开源作者，以及提供灵感、pr的朋友们表示感谢。
+注：xueqiu/rdr是雪球公司基于redis-rdb-tool开源项目开发的，更新维护停止在 2019 年 10 月 9 日。
+
+在此，对原开源项目作者，以及提供issues、pr的朋友们，表示感谢。
 
 
 ## Support For Redis（redis 版本支持）
