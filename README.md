@@ -58,9 +58,10 @@ USAGE:
    rdr [global options] command [command options] [arguments...]
 
 VERSION:
-   v0.0.1
+   vx.x.x
 
 COMMANDS:
+     dumpfile dump statistical information of rdb file to file. path:/tmp/rdb_report
      show     show statistical information of rdbfile by webpage
      keys     get all keys from rdbfile
      help, h  Shows a list of commands or help for one command
@@ -118,12 +119,14 @@ USAGE:
 
 ## Exapmle
 ```
+# 通过网页显示rdb file的统计信息
 $ ./rdr show -p 8080 *.rdb
 ```
 Note that the memory usage is approximate.
 <img width="1155" height="612" alt="image" src="https://github.com/user-attachments/assets/a8b16a78-b232-4282-b2ff-781f0cc87504" />
 
 ```
+# 获取所有key，输出在STDOUT
 $ ./rdr keys example.rdb
 portfolio:stock_follower_count:ZH314136
 portfolio:stock_follower_count:ZH654106
@@ -133,10 +136,14 @@ portfolio:stock_follower_count:ZH346349
 portfolio:stock_follower_count:ZH951803
 portfolio:stock_follower:ZH924804
 portfolio:stock_follower_count:INS104806
+
+# 将统计结果写到文件，文件路径在/tmp/rdb_report
+$ ./rdr-linux  dumpfile  prod-dump.rdb
 ```
 
 ## 常见问题
 
+```
 Q：为什么使用命令（memory usage ）获取的和rdr算的总是不一致
 A：Key和value所对应的struct和指针大小。在jemalloc分配后，字节对齐部分所占用的大小也会计算在used_memory中
    无论是用命令还是rdr都计算了这两块，为什么不一致？可读下 https://blog.csdn.net/f80407515/article/details/122387859
@@ -151,7 +158,8 @@ Q：Redis缓存分析的前缀分隔符是什么？
 A：目前Redis缓存分析的前缀分隔符是按照固定的前缀:;,_-+@=|# 区分的字符串。
 
 Q：各key的内存占用为什么比[HDT3213/rdb](https://github.com/HDT3213/rdb)算的大28？
-A：HDT3213/rdb V.1.3.0没有计算lru_bits占用，lru_bits默认占用24比特位，而本工具将起计算在内了，请看源码d.m.TopLevelObjOverhead。
+A：HDT3213/rdb V.1.3.0没有计算lru_bits，lru_bits默认占用24比特位，而本工具将其计算在内了，请看源码d.m.TopLevelObjOverhead。
+```
 
 
 ## RDR 开发
@@ -229,7 +237,7 @@ A：HDT3213/rdb V.1.3.0没有计算lru_bits占用，lru_bits默认占用24比特
 
 特别感兴趣的是：
 
- 1. 随着redis版本变化，增加新类型的读解析支持
+ 1. 随着redis版本变化，增加新类型的解析支持
  2. 优化、改善代码，提升性能
  
 

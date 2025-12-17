@@ -49,7 +49,7 @@ func main() {
     app := cli.NewApp()
     app.Name = "rdr"
     app.Usage = "a tool to parse redis rdb file"
-    app.Version = "v0.0.1"
+    app.Version = "v1.0.6"
     app.Writer = os.Stdout
     app.ErrWriter = os.Stderr
     app.Commands = []cli.Command{
@@ -58,6 +58,12 @@ func main() {
             Usage:     "dump statistical information of rdb file to STDOUT",
             ArgsUsage: "FILE1 [FILE2] [FILE3]...",
             Action:    dump.ToCliWriter,
+        },
+		cli.Command{
+            Name:      "dumpfile",
+            Usage:     "dump statistical information of rdb file to file. path:/tmp/rdb_report",
+            ArgsUsage: "FILE1 [FILE2] [FILE3]...",
+            Action:    dump.ToCliWriterToFile,
         },
         cli.Command{
             Name:      "show",
