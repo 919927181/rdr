@@ -99,30 +99,30 @@ USAGE:
 ```
 
 ```
-1. 在windows cmd 下打包，编译出 linux 下的可执行文件，在项目根目录下，打开cmd，执行以下命令
+1.在windows cmd 下打包，编译出 linux 下的可执行文件，在项目根目录下，打开cmd，执行以下命令
     set GOOS=linux
     set GOARCH=amd64
     go build -o rdr-linux  main.go
 
-2. 创建目录
+2.创建目录
 # mkdir -p /tmp/rdb/
 # cd /tmp/rdb/
 
-3. 然后把rdr工具、redis的数据库文件.rdb上传到该目录下
+3.然后把rdr工具、redis的数据库文件.rdb上传到该目录下
 
 给工具赋予执行权限
 # chmod a+x ./rdr*
 
-4. 运行
+4.运行
 # ./rdr-linux show -p 8099 *.rdb
 
-5. 防火墙端口放行
+5.防火墙端口放行
      For Ubuntu\Debian：sudo ufw allow 8099/tcp  &&  sudo ufw reload
      For Redhat\Centos：
           sudo firewall-cmd --zone=public --add-port=8099/tcp --permanent
            sudo firewall-cmd --reload
 		   
-6. 查看分析结果，浏览器访问 http://yourip：8099/
+6.查看分析结果，浏览器访问 http://yourip：8099/
 ```
 
 ## Exapmle
