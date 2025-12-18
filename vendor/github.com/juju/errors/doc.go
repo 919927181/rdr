@@ -13,21 +13,21 @@ was created.
 A primary use case for this library is to add extra context any time an
 error is returned from a function.
 
-    if err := SomeFunc(); err != nil {
-	    return err
-	}
+	    if err := SomeFunc(); err != nil {
+		    return err
+		}
 
 This instead becomes:
 
-    if err := SomeFunc(); err != nil {
-	    return errors.Trace(err)
-	}
+	    if err := SomeFunc(); err != nil {
+		    return errors.Trace(err)
+		}
 
 which just records the file and line number of the Trace call, or
 
-    if err := SomeFunc(); err != nil {
-	    return errors.Annotate(err, "more context")
-	}
+	    if err := SomeFunc(); err != nil {
+		    return errors.Annotate(err, "more context")
+		}
 
 which also adds an annotation to the error.
 
@@ -68,12 +68,11 @@ and the other two through Annotate.
 Sometimes when responding to an error you want to return a more specific error
 for the situation.
 
-    if err := FindField(field); err != nil {
-	    return errors.Wrap(err, errors.NotFoundf(field))
-	}
+	    if err := FindField(field); err != nil {
+		    return errors.Wrap(err, errors.NotFoundf(field))
+		}
 
 This returns an error where the complete error stack is still available, and
 `errors.Cause()` will return the `NotFound` error.
-
 */
 package errors

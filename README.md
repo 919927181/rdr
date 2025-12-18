@@ -1,3 +1,9 @@
+![license](https://img.shields.io/github/license/919927181/rdr)
+![download](https://img.shields.io/github/downloads/919927181/rdr/total)
+[![Build Status](https://github.com/919927181/rdr/actions/workflows/go.yml/badge.svg)](https://github.com/919927181/rdr/actions?query=branch%3Amaster)
+[![Go Report Card](https://goreportcard.com/badge/github.com/919927181/rdr)](https://goreportcard.com/report/github.com/919927181/rdr)
+
+
 RDR: redis data reveal
 =================================================
 
@@ -93,30 +99,30 @@ USAGE:
 ```
 
 ```
-1）在windows 下打包，编译出 linux 下的可执行文件，在项目根目录下，打开cmd，执行以下命令
+1. 在windows cmd 下打包，编译出 linux 下的可执行文件，在项目根目录下，打开cmd，执行以下命令
     set GOOS=linux
     set GOARCH=amd64
     go build -o rdr-linux  main.go
 
-2）创建目录
-# mkdir -p /tmp/redisdb/
-# cd /tmp/redisdb/
+2. 创建目录
+# mkdir -p /tmp/rdb/
+# cd /tmp/rdb/
 
-3）然后把rdr工具、redis的数据库文件.rdb上传到该目录下
+3. 然后把rdr工具、redis的数据库文件.rdb上传到该目录下
 
 给工具赋予执行权限
 # chmod a+x ./rdr*
 
-4）运行
+4. 运行
 # ./rdr-linux show -p 8099 *.rdb
 
-5）防火墙端口放行
+5. 防火墙端口放行
      For Ubuntu\Debian：sudo ufw allow 8099/tcp  &&  sudo ufw reload
      For Redhat\Centos：
           sudo firewall-cmd --zone=public --add-port=8099/tcp --permanent
            sudo firewall-cmd --reload
 		   
-6）查看分析结果，浏览器访问 http://yourip：8099/
+6. 查看分析结果，浏览器访问 http://yourip：8099/
 ```
 
 ## Exapmle
@@ -213,14 +219,14 @@ A：HDT3213/rdb V.1.3.0没有计算lru_bits，lru_bits默认占用24比特位，
 
  rdr工具的核心部分就是rdb文件解析，作为开发者，我们可以通过以下几个途径来掌握相关知识：
 
-1）大部分 rdb 文件的解析都是按照 https://github.com/sripathikrishnan/redis-rdb-tools/wiki/Redis-RDB-Dump-File-Format  和 github.com/cupcake/rdb 来的，
+1. 大部分 rdb 文件的解析都是按照 https://github.com/sripathikrishnan/redis-rdb-tools/wiki/Redis-RDB-Dump-File-Format  和 github.com/cupcake/rdb 来的，
    RDB 文件格式说明：https://www.cnblogs.com/Finley/p/16251360.html   ，完整解析器源码在 github.com/HDT3213/rdb
 
-2）Redis迁移工具RedisShake（语言golang），功能之一 从 RDB 文件中读取数据写入目标端，因此，我们可以借鉴rdb文件解析功能
+2. Redis迁移工具RedisShake（语言golang），功能之一 从 RDB 文件中读取数据写入目标端，因此，我们可以借鉴rdb文件解析功能
    项目地址：https://github.com/tair-opensource/RedisShake
    rdb.go源码地址：https://github.com/tair-opensource/RedisShake/tree/v4/internal/rdb
 
-3）可以对照 redis 源码
+3. 可以对照 redis 源码
 
 ```
   rdb.c 文件：https://github.com/redis/redis/blob/7.0-rc3/src/rdb.c       // RDB 文件读写，行1736：robj *rdbLoadObject

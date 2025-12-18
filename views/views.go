@@ -266,11 +266,13 @@ var _bindata = map[string]func() (*asset, error){
 // directory embedded in the file by go-bindata.
 // For example if you run go-bindata on data/... and data contains the
 // following hierarchy:
-//     data/
-//       foo.txt
-//       img/
-//         a.png
-//         b.png
+//
+//	data/
+//	  foo.txt
+//	  img/
+//	    a.png
+//	    b.png
+//
 // then AssetDir("data") would return []string{"foo.txt", "img"}
 // AssetDir("data/img") would return []string{"a.png", "b.png"}
 // AssetDir("foo.txt") and AssetDir("notexist") would return an error
@@ -303,12 +305,12 @@ type bintree struct {
 }
 
 var _bintree = &bintree{nil, map[string]*bintree{
-	"aside.html":   &bintree{asideHtml, map[string]*bintree{}},
-	"base.html":    &bintree{baseHtml, map[string]*bintree{}},
-	"chartjs.html": &bintree{chartjsHtml, map[string]*bintree{}},
-	"footer.html":  &bintree{footerHtml, map[string]*bintree{}},
-	"header.html":  &bintree{headerHtml, map[string]*bintree{}},
-	"revel.html":   &bintree{revelHtml, map[string]*bintree{}},
+	"aside.html":   {asideHtml, map[string]*bintree{}},
+	"base.html":    {baseHtml, map[string]*bintree{}},
+	"chartjs.html": {chartjsHtml, map[string]*bintree{}},
+	"footer.html":  {footerHtml, map[string]*bintree{}},
+	"header.html":  {headerHtml, map[string]*bintree{}},
+	"revel.html":   {revelHtml, map[string]*bintree{}},
 }}
 
 // RestoreAsset restores an asset under the given directory

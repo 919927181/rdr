@@ -21,57 +21,57 @@ import (
 )
 
 func index(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-    for key := range counters.Items() {
-        http.Redirect(w, r, "/instance/"+key.(string), http.StatusFound)
-        return
-    }
+	for key := range counters.Items() {
+		http.Redirect(w, r, "/instance/"+key.(string), http.StatusFound)
+		return
+	}
 }
 
 func rdbReveal(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-    // deep copy  tplCommonData into data
-    data := map[string]interface{}{}
-    for key, val := range tplCommonData {
-        data[key] = val
-    }
+	// deep copy  tplCommonData into data
+	data := map[string]interface{}{}
+	for key, val := range tplCommonData {
+		data[key] = val
+	}
 
-    path := p.ByName("path")
+	path := p.ByName("path")
 
-    c := counters.Get(path)
-    if c == nil {
-        return
-    }
-    counter := c.(*Counter)
+	c := counters.Get(path)
+	if c == nil {
+		return
+	}
+	counter := c.(*Counter)
 
-    data["CurrentInstance"] = path
-    data["LargestKeys"] = counter.GetLargestEntries(200)  //top 200 bigkey (按内存)
+	data["CurrentInstance"] = path
+	data["LargestKeys"] = counter.GetLargestEntries(200) //top 200 bigkey (按内存)
 
-    largestKeyPrefixesByType := map[string][]*PrefixEntry{}
-    for _, entry := range counter.GetLargestKeyPrefixes() {
-        // mem use less than 1M, and list is long enough, not necessary to add
-        if entry.Bytes < 1000*1000 && len(largestKeyPrefixesByType[entry.Type]) > 50 {
-            continue
-        }
-        largestKeyPrefixesByType[entry.Type] = append(largestKeyPrefixesByType[entry.Type], entry)
-    }
-    data["LargestKeyPrefixes"] = largestKeyPrefixesByType
+	largestKeyPrefixesByType := map[string][]*PrefixEntry{}
+	for _, entry := range counter.GetLargestKeyPrefixes() {
+		// mem use less than 1M, and list is long enough, not necessary to add
+		if entry.Bytes < 1000*1000 && len(largestKeyPrefixesByType[entry.Type]) > 50 {
+			continue
+		}
+		largestKeyPrefixesByType[entry.Type] = append(largestKeyPrefixesByType[entry.Type], entry)
+	}
+	data["LargestKeyPrefixes"] = largestKeyPrefixesByType
 
-    data["TypeBytes"] = counter.typeBytes
-    data["TypeNum"] = counter.typeNum
-    totalNum := uint64(0)
-    for _, v := range counter.typeNum {
-        totalNum += v
-    }
-    totalBytes := uint64(0)
-    for _, v := range counter.typeBytes {
-        totalBytes += v
-    }
-    data["TotalNum"] = totalNum
-    data["TotalBytes"] = totalBytes
+	data["TypeBytes"] = counter.typeBytes
+	data["TypeNum"] = counter.typeNum
+	totalNum := uint64(0)
+	for _, v := range counter.typeNum {
+		totalNum += v
+	}
+	totalBytes := uint64(0)
+	for _, v := range counter.typeBytes {
+		totalBytes += v
+	}
+	data["TotalNum"] = totalNum
+	data["TotalBytes"] = totalBytes
 
-    lenLevelCount := map[string][]*PrefixEntry{}
-    for _, entry := range counter.GetLenLevelCount() {
-        lenLevelCount[entry.Type] = append(lenLevelCount[entry.Type], entry)
-    }
-    data["LenLevelCount"] = lenLevelCount
-    ServeHTML(w, "base.html", "revel.html", data)
+	lenLevelCount := map[string][]*PrefixEntry{}
+	for _, entry := range counter.GetLenLevelCount() {
+		lenLevelCount[entry.Type] = append(lenLevelCount[entry.Type], entry)
+	}
+	data["LenLevelCount"] = lenLevelCount
+	ServeHTML(w, "base.html", "revel.html", data)
 }

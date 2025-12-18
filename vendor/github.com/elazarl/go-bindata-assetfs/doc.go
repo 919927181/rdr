@@ -5,9 +5,12 @@
 // about embedding binary data with go-bindata.
 //
 // Usage example, after running
-//    $ go-bindata data/...
+//
+//	$ go-bindata data/...
+//
 // use:
-//     http.Handle("/",
-//        http.FileServer(
-//        &assetfs.AssetFS{Asset: Asset, AssetDir: AssetDir, Prefix: "data"}))
+//
+//	http.Handle("/",
+//	   http.FileServer(
+//	   &assetfs.AssetFS{Asset: Asset, AssetDir: AssetDir, Prefix: "data"}))
 package assetfs

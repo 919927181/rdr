@@ -83,16 +83,17 @@ func (l *locationError) Unwrap() error {
 // to SetLocation.
 //
 // For example:
-//     type FooError struct {
-//         errors.Err
-//         code int
-//     }
 //
-//     func NewFooError(code int) error {
-//         err := &FooError{errors.NewErr("foo"), code}
-//         err.SetLocation(1)
-//         return err
-//     }
+//	type FooError struct {
+//	    errors.Err
+//	    code int
+//	}
+//
+//	func NewFooError(code int) error {
+//	    err := &FooError{errors.NewErr("foo"), code}
+//	    err.SetLocation(1)
+//	    return err
+//	}
 func NewErr(format string, args ...interface{}) Err {
 	return Err{
 		message: fmt.Sprintf(format, args...),
@@ -104,16 +105,17 @@ func NewErr(format string, args ...interface{}) Err {
 // to SetLocation.
 //
 // For example:
-//     type FooError struct {
-//         errors.Err
-//         code int
-//     }
 //
-//     func (e *FooError) Annotate(format string, args ...interface{}) error {
-//         err := &FooError{errors.NewErrWithCause(e.Err, format, args...), e.code}
-//         err.SetLocation(1)
-//         return err
-//     })
+//	type FooError struct {
+//	    errors.Err
+//	    code int
+//	}
+//
+//	func (e *FooError) Annotate(format string, args ...interface{}) error {
+//	    err := &FooError{errors.NewErrWithCause(e.Err, format, args...), e.code}
+//	    err.SetLocation(1)
+//	    return err
+//	})
 func NewErrWithCause(other error, format string, args ...interface{}) Err {
 	return Err{
 		message:  fmt.Sprintf(format, args...),
