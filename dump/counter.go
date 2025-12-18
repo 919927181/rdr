@@ -50,7 +50,7 @@ func NewCounter() *Counter {
 	}
 }
 
-// Counter for redis memory useage
+// Counter for redis memory usage
 type Counter struct {
 	largestEntries     *entryHeap
 	largestKeyPrefixes *prefixHeap

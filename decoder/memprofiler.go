@@ -234,8 +234,8 @@ func (m *MemProfiler) ZipListEntryOverHead(value []byte) uint64 {
 	return uint64(header + size)
 }
 
-// KeyExpiryOverhead get memory useage of a key expiry
-// Key expiry is stored in a hashtable, so we have to pay for the cost of a hashtable entry
+// KeyExpiryOverhead get memory usage of a key expiry
+// Key expiry is stored in a hashTable, so we have to pay for the cost of a hashTable entry
 // The timestamp itself is stored as an int64, which is a 8 bytes
 func (m *MemProfiler) KeyExpiryOverhead(expiry int64) uint64 {
 	//If there is no expiry, there isn't any overhead
@@ -245,7 +245,7 @@ func (m *MemProfiler) KeyExpiryOverhead(expiry int64) uint64 {
 	return m.HashTableEntryOverHead() + 8
 }
 
-// RobjOverHead get memory useage of a robj
+// RobjOverHead get memory usage of a robj
 //
 //	typedef struct redisobject {
 //	    unsigned type:4;
