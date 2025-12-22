@@ -98,11 +98,10 @@ USAGE:
    rdr keys FILE1 [FILE2] [FILE3]...
 ```
 
+### linux下使用介绍
+
 ```
-1.在windows cmd 下打包，编译出 linux 下的可执行文件，在项目根目录下，打开cmd，执行以下命令
-    set GOOS=linux
-    set GOARCH=amd64
-    go build -o rdr-linux  main.go
+1. 从releases中，下载 linux 下的可执行文件
 
 2.创建目录
 # mkdir -p /tmp/rdb/
@@ -123,6 +122,9 @@ USAGE:
            sudo firewall-cmd --reload
 		   
 6.查看分析结果，浏览器访问 http://yourip：8099/
+
+附-windows下使用，打开cmd，执行：
+> .\rdr-win64.exe show -p 8099 dump.rdb
 ```
 
 ## Exapmle
@@ -198,21 +200,23 @@ A：HDT3213/rdb V.1.3.0没有计算lru_bits，lru_bits默认占用24比特位，
 4. 打包
    
 ```
- 1.如果改动了静态资源（css\js\html），需要使用go-bindata将静态资源文件嵌入到go文件里
+ 1. 在windows下打包，编译出 linux 下的可执行文件，在项目根目录下，打开cmd，执行以下命令
+    set GOOS=linux
+    set GOARCH=amd64
+    go build -o rdr-linux  main.go
+	
+	编译出Windows下的exe文件
+	set GOOS=windows 
+	set GOARCH=amd64 
+	go build -o rdr-win64.exe  main.go
 
- //go-bindata -prefix "static/" -o=static/static.go -pkg=static -ignore static.go static/...
+ 2.如果改动了静态资源（css\js\html），需要使用go-bindata将静态资源文件嵌入到go文件里
+   //go-bindata -prefix "static/" -o=static/static.go -pkg=static -ignore static.go static/... 
+   //go-bindata -prefix "views/" -o=views/views.go -pkg=views -ignore views.go views/...
  
- //go-bindata -prefix "views/" -o=views/views.go -pkg=views -ignore views.go views/...
- 
- 2. 作用是在编译前自动化生成某类代码;它常用于自动生成代码
- 
- go generate
- ```
-
-
-5. 构建，输出linu下的可执行文件
-
-见上面的Usage（使用）
+ 3. 作用是在编译前自动化生成某类代码;它常用于自动生成代码 
+    go generate
+```
 
 
 ## RDB 开发

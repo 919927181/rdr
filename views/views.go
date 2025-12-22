@@ -137,7 +137,7 @@ func chartjsHtml() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "chartjs.html", size: 9989, mode: os.FileMode(438), modTime: time.Unix(1765958171, 0)}
+	info := bindataFileInfo{name: "chartjs.html", size: 9989, mode: os.FileMode(438), modTime: time.Unix(1766050831, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }

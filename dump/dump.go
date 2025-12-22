@@ -26,12 +26,12 @@ func Dump(path string) (map[string]interface{}, error) {
 		f, err := os.Open(path)
 		defer close(decoder.Entries)
 		if err != nil {
-			fmt.Printf("open rdbfile err: %v\n", err)
+			fmt.Printf("open rdb file err: %v\n", err)
 			return
 		}
 		err = rdb.Decode(f, decoder)
 		if err != nil {
-			fmt.Printf("decode rdbfile err: %v\n", err)
+			fmt.Printf("decode rdb file err: %v\n", err)
 			return
 		}
 	}()
@@ -95,7 +95,7 @@ func ToCliWriterToFile(cli *cli.Context) {
 	writer := bufio.NewWriter(file)
 	defer writer.Flush() // WriteString 后内容暂存在缓冲区，必须调用 Flush() 才会真正写入磁盘文件
 
-	// parse rdbfile
+	// parse rdb file
 	fmt.Fprintln(cli.App.Writer, "start parsing...")
 	start_milliseconds := time.Now().UnixMilli()
 	// 写入内容，换行需要手动加\n

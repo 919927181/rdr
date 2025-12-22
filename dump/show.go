@@ -53,7 +53,7 @@ func Show(c *cli.Context) {
 	}
 
 	// parse rdbfile
-	fmt.Fprintln(c.App.Writer, "start parsing...")
+	fmt.Fprintln(c.App.Writer, "start ...")
 
 	instances := []string{}
 	InitHTMLTmpl()
@@ -97,7 +97,7 @@ func Show(c *cli.Context) {
 	router.ServeFiles("/static/*filepath", &staticFS)
 	router.GET("/", index)
 	router.GET("/instance/:path", rdbReveal)
-	fmt.Fprintln(c.App.Writer, "parsing finished, please access http://{$IP}:"+c.String("port"))
+	fmt.Fprintln(c.App.Writer, "when parsing finished, please access http://{$IP}:"+c.String("port"))
 	listenErr := http.ListenAndServe(":"+c.String("port"), router)
 	if listenErr != nil {
 		fmt.Fprintf(c.App.ErrWriter, "Listen port err: %v\n", listenErr)
