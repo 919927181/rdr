@@ -201,13 +201,15 @@ A：HDT3213/rdb V.1.3.0没有计算lru_bits，lru_bits默认占用24比特位，
    
 ```
  1. 在windows下打包，编译出 linux 下的可执行文件，在项目根目录下，打开cmd，执行以下命令
+    set CGO_ENABLED=0
     set GOOS=linux
     set GOARCH=amd64
     go build -o rdr-linux  main.go
 	
 	编译出Windows下的exe文件
-	set GOOS=windows 
-	set GOARCH=amd64 
+	set CGO_ENABLED=0
+	set GOOS=windows
+	set GOARCH=amd64
 	go build -o rdr-win64.exe  main.go
 
  2.如果改动了静态资源（css\js\html），需要使用go-bindata将静态资源文件嵌入到go文件里
