@@ -185,11 +185,14 @@ func (d *Decoder) StartHash(key []byte, length, expiry int64, info *rdb.Info) {
 
 	if info.Encoding == "hashtable" {
 		bytes += d.m.HashTableOverHead(uint64(length))
-	} else if info.Encoding == "listpack" && info.SizeOfValue > 0 {
-		bytes += uint64(info.SizeOfValue)
+	} else if info.Encoding == "listpack" || info.Encoding == "ziplist" || info.Encoding == "zipmap" {
+		if info.SizeOfValue > 0 {
+			bytes += uint64(info.SizeOfValue)
+        }
 	} else {
 		panic(fmt.Sprintf("unexpected size(0) or encoding:%s", info.Encoding))
 	}
+
 
 	expiryStr := ""
 	if expiry > 0 {
