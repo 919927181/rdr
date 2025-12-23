@@ -113,7 +113,11 @@ USAGE:
 # chmod a+x ./rdr*
 
 4.运行
-# ./rdr-linux show -p 8099 *.rdb
+# GOGC=200 ./rdr-linux show -p 8099 *.rdb
+注意,如果你的rdb文件比较大（1G+）：
+    建议一次只分析一个rdb文件
+    如果rdb文件大，那么cpu使用率就会过高，此时我们调整GOGC，默认100，提高值(200-400)可降低GC频率，减少CPU占用但会增加内存使用
+
 
 5.防火墙端口放行
      For Ubuntu\Debian：sudo ufw allow 8099/tcp  &&  sudo ufw reload
@@ -130,7 +134,7 @@ USAGE:
 ## Exapmle
 ```
 # 通过网页显示rdb file的统计信息
-$ ./rdr show -p 8080 *.rdb
+$ GOGC=200 ./rdr show -p 8080 dump.rdb
 ```
 Note that the memory usage is approximate.
 <img width="1155" height="612" alt="image" src="https://github.com/user-attachments/assets/a8b16a78-b232-4282-b2ff-781f0cc87504" />
@@ -148,7 +152,7 @@ portfolio:stock_follower:ZH924804
 portfolio:stock_follower_count:INS104806
 
 # 将统计结果写到文件，文件路径在/tmp/rdb_report
-$ ./rdr-linux  dumpfile  prod-dump.rdb
+$ GOGC=200 ./rdr-linux  dumpfile  prod-dump.rdb
 ```
 
 ## 常见问题

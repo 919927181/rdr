@@ -44,7 +44,8 @@ func ReadListpack(rd io.Reader) []string {
 
 	_ = ReadUint32(rd) // bytes，即内存占用
 	size := int(ReadUint16(rd))
-	var elements []string
+	//var elements []string
+	var elements = make([]string, 0, size)
 	for i := 0; i < size; i++ {
 		ele := readListpackEntry(rd)
 		elements = append(elements, ele)
@@ -66,7 +67,8 @@ func ReadListpack2(rd io.Reader) ([]string, uint32) {
 	//fmt.Printf("value use memory  %d\n", bytes)
 
 	size := int(ReadUint16(rd))
-	var elements []string
+	//var elements []string
+	var elements = make([]string, 0, size)
 	for i := 0; i < size; i++ {
 		ele := readListpackEntry(rd)
 		elements = append(elements, ele)
