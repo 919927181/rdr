@@ -197,7 +197,7 @@ func revelHtml() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "revel.html", size: 14344, mode: os.FileMode(438), modTime: time.Unix(1765963073, 0)}
+	info := bindataFileInfo{name: "revel.html", size: 14344, mode: os.FileMode(438), modTime: time.Unix(1766469716, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
