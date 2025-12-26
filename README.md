@@ -11,7 +11,7 @@ RDR: redis data reveal
 
 RDR (redis data Reveal) is a tool for offline analysis of redis rdb files. Through it, you can quickly discover bigkeys, help you grasp the occupation and distribution of keys in memory, learn which keys are growing infinitely (through key expiration time or quantity). It provides data support for your optimization operations and helps you avoid problems such as insufficient memory and performance degradation caused by key skew.
 
-- RDR(redis data Reveal)是一个用于离线分析 redis rdb 文件的工具，通过它，可以快速发现实例中的bigkey，帮助您掌握Key在内存中的占用和分布、得知哪些key在无限增长（通过Key过期时间或数量）等信息，为您的优化操作提供数据支持，帮助您避免因Key倾斜引发的内存不足、性能下降等问题。
+- RDR(redis data Reveal)是一个用于离线分析 redis rdb 文件的工具，通过它，可以快速发现实例中的bigkey，帮助您掌握Key在内存中的占用和分布、得知哪些key在无限增长等，为您的优化操作提供数据支持，帮助您避免因Key倾斜（导致集群内存分布不均）引发的内存不足、性能下降等问题。
 - RDR由golang实现的，速度上比较快。
 
 
@@ -98,7 +98,7 @@ USAGE:
    rdr keys FILE1 [FILE2] [FILE3]...
 ```
 
-### linux下使用介绍
+### linux下使用说明
 
 ```
 1. 从releases中，下载 linux 下的可执行文件
@@ -152,7 +152,7 @@ portfolio:stock_follower:ZH924804
 portfolio:stock_follower_count:INS104806
 
 # 将统计结果写到文件，文件路径在/tmp/rdb_report
-$ GOGC=200 ./rdr-linux  dumpfile  prod-dump.rdb
+$ GOGC=200 ./rdr-linux  dumpfile  dump.rdb
 ```
 
 ## 常见问题
@@ -173,6 +173,9 @@ A：目前Redis缓存分析的前缀分隔符是按照固定的前缀:;,_-+@=|# 
 
 Q：各key的内存占用为什么比[HDT3213/rdb](https://github.com/HDT3213/rdb)算的大28？
 A：HDT3213/rdb V.1.3.0没有计算lru_bits，lru_bits默认占用24比特位，而本工具将其计算在内了，请看源码d.m.TopLevelObjOverhead。
+
+Q：通常redis集群只会用到db0,单例中可能会用多个槽。那么当不同db里有相同前缀的key时，前缀分析该如何显示所属db？
+A: v1.0.9版本起，把db都显示出来，以逗号隔开。
 ```
 
 
@@ -182,20 +185,18 @@ A：HDT3213/rdb V.1.3.0没有计算lru_bits，lru_bits默认占用24比特位，
 
 ```
 \decoder\
-   |-- decoder.go       # 调用直接依赖github.com/919927181/rdb的方法，读取rdb数据
+   |-- decoder.go       # 对github.com/919927181/rdb/decoder.go中的interface方法实现，rdb解析各类型数据时，会调用相应的方法，进行计数。
    |-- memprofiler.go  # 内存分析器
 \dump\
-   |-- dump.go  # 转储rdb文件统计信息
+   |-- dump.go  # 将rdb文件统计信息输出到STDOUT或文件
 \static  # 以html展示结果时，需要的静态资源文件
 \views  # html 前端页面代码
 
 ```
 
-
 2. 如果你想修改redis rdb 文件解析插件的源码，可以pr到github.com/919927181/rdb
 
    你可以直接修改下载到本地的依赖 \vendor\github.com\919927181\rdb，调试成功后，再进行pr 或创建\并引用自己的rdb依赖
-
 
 3. 如果你需要修改html
 

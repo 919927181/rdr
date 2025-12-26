@@ -46,7 +46,7 @@ func NewCounter() *Counter {
 		separators:         ":;,_- ",
 		slotBytes:          map[int]uint64{},
 		slotNum:            map[int]uint64{},
-		keyPrefixDb:        map[typeKey]int{},
+		keyPrefixDb:        map[typeKey]string{},
 	}
 }
 
@@ -68,16 +68,35 @@ type Counter struct {
 	typeNum            map[string]uint64
 	slotBytes          map[int]uint64
 	slotNum            map[int]uint64
-	keyPrefixDb        map[typeKey]int
+	keyPrefixDb        map[typeKey]string
 }
 
-// Count by various dimensions
+// Count by various dimensions，show.go NewCounter 后，调用此方法，遍历decoder的entry, <-chan表示一个只能接收数据的单向通道
 func (c *Counter) Count(in <-chan *decoder.Entry) {
 	for e := range in {
 		c.count(e)
 	}
 	// get largest prefixes
 	c.calcuLargestKeyPrefix(1000)
+}
+
+// 传入一个entry，执行各指标的count方法
+func (c *Counter) count(e *decoder.Entry) {
+	c.countLargestEntries(e, 500)
+	c.countByType(e)
+	c.countByLength(e)
+	c.countByKeyPrefix(e)
+	c.countBySlot(e)
+	//c.countByDb(e) //该方法由caiqing0204添加
+}
+
+//该方法由caiqing0204添加，没有看到哪儿用到，这里会导致前缀所属db不正确
+func (c *Counter) countByDb(e *decoder.Entry) {
+	key := typeKey{
+		Type: e.Type,
+		Key:  e.Key,
+	}
+	c.keyPrefixDb[key] = strconv.Itoa(e.Db)
 }
 
 // GetLargestEntries from heap, num max is 500
@@ -126,22 +145,6 @@ func (c *Counter) GetLenLevelCount() []*PrefixEntry {
 	return res
 }
 
-func (c *Counter) count(e *decoder.Entry) {
-	c.countLargestEntries(e, 500)
-	c.countByType(e)
-	c.countByLength(e)
-	c.countByKeyPrefix(e)
-	c.countBySlot(e)
-	c.countByDb(e)
-}
-
-func (c *Counter) countByDb(e *decoder.Entry) {
-	key := typeKey{
-		Type: e.Type,
-		Key:  e.Key,
-	}
-	c.keyPrefixDb[key] = e.Db
-}
 
 func (c *Counter) countLargestEntries(e *decoder.Entry, num int) {
 	heap.Push(c.largestEntries, e)
@@ -186,18 +189,23 @@ func (c *Counter) countByType(e *decoder.Entry) {
 	c.typeBytes[e.Type] += e.Bytes
 }
 
+// 传入一个entry，根据key名，通过分隔符得到前缀，然后对各前缀进行计数
 func (c *Counter) countByKeyPrefix(e *decoder.Entry) {
-	// reset all numbers to 0
+	// reset all numbers to 0 将key名字中的所有数字（通常为id号）都置为0
 	k := strings.Map(func(c rune) rune {
 		if c >= 48 && c <= 57 { //48 == "0" 57 == "9"
-			return '0'
+			return '*'
 		}
 		return c
 	}, e.Key)
+
+
+    // 将key名字进行分割，得到所有前缀
 	prefixes := getPrefixes(k, c.separators)
 	key := typeKey{
 		Type: e.Type,
 	}
+	//遍历前缀，对其计数
 	for _, prefix := range prefixes {
 		if len(prefix) == 0 {
 			continue
@@ -205,6 +213,14 @@ func (c *Counter) countByKeyPrefix(e *decoder.Entry) {
 		key.Key = prefix
 		c.keyPrefixBytes[key] += e.Bytes
 		c.keyPrefixNum[key]++
+		 //2025-12-25 liyanjing add 如果不同db里有相同前缀的key，那么设置属于任何一个db都不合适
+		if c.keyPrefixDb[key] =="" {
+			c.keyPrefixDb[key] = strconv.Itoa(e.Db)
+		}else {
+			if !strings.Contains(c.keyPrefixDb[key], strconv.Itoa(e.Db)) {
+				c.keyPrefixDb[key] += ","+strconv.Itoa(e.Db)
+			}
+		}
 	}
 }
 
@@ -272,7 +288,7 @@ type PrefixEntry struct {
 	typeKey
 	Bytes uint64
 	Num   uint64
-	Db    int
+	Db    string  //之前为int
 }
 
 func (h prefixHeap) Len() int {

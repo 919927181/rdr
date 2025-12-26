@@ -136,7 +136,7 @@
                                             <td class="sorttable_alpha"> KeyPrefix </td>
                                             <td style="width:80px !important;"> Bytes </td>
                                             <td> NumberOfKey </td>
-                                            <td class="sorttable_numeric" style="width:32px !important;"> Db </td>
+                                            <td> Db </td>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -145,7 +145,7 @@
                                             <td class="limited-width">{{$entry.Key}}</td>
                                             <td sorttable_customkey="{{$entry.Bytes}}">{{humanizeBytes $entry.Bytes}}</td>
                                             <td sorttable_customkey="{{$entry.Num}}">{{humanizeComma $entry.Num}}</td>
-                                            <td>{{$entry.Db}}</td>
+                                            <td class="limited-width48">{{$entry.Db}}</td>
                                         </tr>
                                         {{end}}
                                     </tbody>
