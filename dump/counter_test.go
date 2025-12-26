@@ -30,12 +30,14 @@ func TestGetLargestKeyPrefixes(t *testing.T) {
 		NumOfElem:          1,
 		LenOfLargestElem:   1,
 		FieldOfLargestElem: "test",
+		Db:                 0,
+
 	}
 	c := NewCounter()
 	c.countByKeyPrefix(e)
 	c.calcuLargestKeyPrefix(1)
 	for _, p := range c.GetLargestKeyPrefixes() {
-		assert.Equal(t, "RELATIONSFOLLOWERIDS0000000000", p.Key)
+		assert.Equal(t, "RELATIONSFOLLOWERIDS**********", p.Key) // countByKeyPrefix reset all numbers to 0 Change to * by liyanjing
 	}
 }
 
