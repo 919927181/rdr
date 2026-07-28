@@ -8,7 +8,7 @@
 
 RDR (redis data Reveal) is a tool for offline analysis of redis rdb files. Through it, you can quickly discover bigkeys, help you grasp the occupation and distribution of keys in memory, learn which keys are growing infinitely (through key expiration time or quantity). It provides data support for your optimization operations and helps you avoid problems such as insufficient memory and performance degradation caused by key skew.
 
-RDR(redis data Reveal)是一个用于离线分析 redis rdb 文件的工具。帮助您掌握redis存了哪些 key，是什么类型，Key在内存中的占用和分布情况（哪些 key 内存占用最多，有没有大 key）以及key的过期状况等。有助于您定位遇到的redis使用问题，能为您的优化操作提供数据支持，帮助您避免因Key倾斜（导致集群内存分布不均）引发的内存不足、性能下降等问题发生。
+RDR(redis data Reveal)是一个用于离线分析 redis rdb 文件的工具。从类型、元素数量、key过期时间和数据大小，这4个角度分析，帮助您掌握redis存了哪些 key，是什么类型，Key在内存中的占用和分布情况（哪些 key 内存占用最多、元素个数多）以及key的过期状况等。有助于您定位遇到的redis使用问题，能为您的优化操作提供数据支持，帮助您避免因Key倾斜（导致集群内存分布不均）引发的内存不足、性能下降等问题发生。
 
 常见用途，如找出 bigkey，哪些key无限制的增长，用于排查redis内存占用高或CPU负载高，甚至系统崩溃问题原因。
 
@@ -167,7 +167,7 @@ OPTIONS:
 $ GOGC=200 ./rdr-linux show -p 8099 dump.rdb
 # 从v1.1.3版本起：
   - 支持指定获取最大的 N 个键，最大500; 
-  - 支持指定内存大小过滤参数-s，小于阈值的key被过滤掉，用于导出大于阈值的大 key，单位为B/KB/MB/GB
+  - 支持指定内存大小过滤参数-s，用于导出大于阈值的大 key，小于阈值的key被过滤掉，单位为B/KB/MB/GB
 $ GOGC=200 ./rdr-linux show -p 8099 -n 100 -s 10kb dump.rdb
 
 # 从v1.1.4版本起：
@@ -190,7 +190,7 @@ Note that the memory usage is approximate.
 $ GOGC=200 ./rdr-linux  dump2file  dump.rdb
 # 从v1.1.3版本起：
   - 支持指定获取最大的 N 个键，最大500; 
-  - 支持指定内存大小过滤参数-s，小于阈值的key被过滤掉，用于导出大于阈值的大 key，单位为B/KB/MB/GB
+  - 支持指定内存大小过滤参数-s，用于导出大于阈值的大 key，小于阈值的key被过滤掉，单位为B/KB/MB/GB
 $ GOGC=200 ./rdr-linux  dump2file -n 100 -s 10kb  dump.rdb
 
 # 从v1.1.4版本起：
@@ -206,7 +206,7 @@ $ GOGC=200 ./rdr-linux dump2file pn 500 psn 5000 pmn 50000 dump.rdb
 ```
 
 ```
-3.解析出所有key及属性信息，输出到文件（当前目录/rdb-all-keys-xxx.txt），以便自行分析。
+3.解析出所有key元信息，输出到文件（当前目录/rdb-all-keys-xxx.txt），以便自行分析。
 $ GOGC=200 ./rdr-linux keys dump.rdb
 key,type,encoding,size,humanizeSize,numOfElem,expiration,expire_seconds,lruIdle,lfuFreq,db
 student:1:name, string, string, 100, 100 B, 8, , -1, 0, 0
@@ -228,8 +228,10 @@ CREATE TABLE rdb_keys_infor (
     `db` int NOT NULL COMMENT 'db'
 ) ENGINE = InnoDB COMMENT = 'redis key信息表';
 
-备注，根据maxmemory-policy配置的淘汰策略，我们可以找出冷数据：
-  - 如果策略是volatile-lru或allkeys-lru，记录的是Key的最后一次访问时间（lruIdle）。
+备注：maxmemory-policy配置的淘汰策略：
+  - 如果策略是volatile-lru或allkeys-lru，记录的是该键距离上次访问的空闲时间（lruIdle），存储了一个24比特位的“LRU时钟”值，单位是秒。
+    - 我们可以根据rdb的创建时间，来推算出键的最后一次访问时间 ≈ RDB文件的创建时间（ctime） - idle秒数 
+    - 不要依赖此公式进行精确的、长周期的时间推算，因为24位计数器周期是194天。
   - 如果策略包含LFU（如volatile-lfu），记录的是访问频率（lfuFreq）。
 
 ```
@@ -237,9 +239,8 @@ CREATE TABLE rdb_keys_infor (
 ## 常见问题
 
 ```
-Q：为什么使用 memory usage 命令和rdr算的内存使用不一致？
-A：Key和value所对应的struct和指针大小。在jemalloc分配后，字节对齐部分所占用的大小也会计算在used_memory中
-   rdr分析的key内存占用是一个近似值。无论是用命令还是rdr都计算了这两块，为什么不一致？可读下 https://blog.csdn.net/f80407515/article/details/122387859
+Q：为什么rdr算的内存大小和使用 memory usage 命令查的结果不一致？
+A：不一致是预期内的正常现象，rdr是基于RDB文件进行的离线估算，其实命令查的结果也是非精准值，在容量治理和故障排查的“战场”上，大可放心使用。
 
 Q：如何处理报错decode rdbfile error: rdb: unknown object type 116 for key？
 A：该报错表示实例中存在非标准或新版本增加的数据结构，暂不支持分析，你可以还原到测试实例删除后再进行分析。
@@ -250,13 +251,10 @@ A：在Redis缓存分析中，针对String类型的Key，其元素数量就是�
 Q：Redis缓存分析的前缀分隔符是什么？
 A：目前Redis缓存分析的前缀分隔符，默认为":;,_- "，V1.1.4起支持传递参数。
 
-Q：各key的内存占用为什么比[HDT3213/rdb](https://github.com/HDT3213/rdb)算的大28？
-A：lru_bits 默认占用24比特位，HDT3213/rdb V.1.3.0没有计算，而本工具计算了，请看源码d.m.TopLevelObjOverhead。
-
 Q：通常redis集群只会用到db0,单例中可能会用多个槽。那么当不同db里有相同前缀的key时，前缀分析列表该如何显示所属db？
-A: 从v1.0.9版本起，将所有所属的db都进行了显示，多个时以逗号隔开。
+A: 从v1.0.9版本起，将所有所属的db都进行了显示，多个以逗号隔开。
 
-Q：Key过期时间是如何分析的？
+Q：rdr是如何计算的Key过期时间？
 A: key的过期时间是时间戳，不是ttl，因此，只能是剩余时间分析。rdr 根据与 rdb 创建时间（AUX元属性之ctime）的差值，进行的分布分析。
 
 Q：什么是大 key?
@@ -279,23 +277,36 @@ A: 缓存时间设置1小时内最好，最好不要超过24小时
 \dump\
    |-- dump.go          # 将rdb文件统计信息输出到STDOUT或文件
    |-- keys_export.go  # 将获取所有key及属性信息输出到File，以便自行分析之需要
-\static  # 以html展示结果时，需要的静态资源文件
+\static  # 以html方式展示分析报告的静态资源文件
 \views  # html 前端页面代码
 
 ```
 
 2. 如果你想修改redis rdb 文件解析插件源码，可以pr到github.com/919927181/rdb
 
-   你可以直接修改下载到本地的依赖 \vendor\github.com\919927181\rdb，调试成功后，再进行pr 或创建\并引用自己的rdb依赖
+3. 如果你需要修改html（rdr报告的网页），你需要安装go-bindata 或 go-bindata-assetfs
 
-3. 如果你需要修改html
-
-    你需要安装go-bindata，安装手册可参考 https://blog.csdn.net/qq_67017602/article/details/130742316
+    安装手册可参考 https://blog.csdn.net/qq_67017602/article/details/130742316
+	
+	安装 go-bindata 
+      go get -u github.com/go-bindata/go-bindata/...
+      当go版本大于1.17的时候，使用这个命令：
+      go install -a -v github.com/go-bindata/go-bindata/...@latest
+	  
+	或安装 go-bindata-assetfs
+      go install -a -v github.com/elazarl/go-bindata-assetfs/...@latest
 
 4. 打包
    
 ```
- 1. 在windows下打包，编译出 linux 下的可执行文件，在项目根目录下，打开cmd，执行以下命令
+ 1.如果改动了静态资源（css\js\html），需要使用go-bindata将静态资源文件嵌入到go文件里
+    go-bindata -prefix "static/" -o=static/static.go -pkg=static -ignore static.go static/... 
+    go-bindata -prefix "views/" -o=views/views.go -pkg=views -ignore views.go views/...
+ 
+ 2. 在编译前自动化生成某类代码，它常用于自动生成代码，我一般是直接执行打包命令
+    go generate
+	
+ 3. 在windows下打包，编译出 linux 下的可执行文件，在项目根目录下，打开cmd，执行以下命令
     set CGO_ENABLED=0
     set GOOS=linux
     set GOARCH=amd64
@@ -307,12 +318,6 @@ A: 缓存时间设置1小时内最好，最好不要超过24小时
 	set GOARCH=amd64
 	go build -o rdr-win64.exe  main.go
 
- 2.如果改动了静态资源（css\js\html），需要使用go-bindata将静态资源文件嵌入到go文件里
-    go-bindata -prefix "static/" -o=static/static.go -pkg=static -ignore static.go static/... 
-    go-bindata -prefix "views/" -o=views/views.go -pkg=views -ignore views.go views/...
- 
- 3. 在编译前自动化生成某类代码，它常用于自动生成代码，我一般是直接执行打包命令
-    go generate
 ```
 
 
@@ -335,8 +340,6 @@ A: 缓存时间设置1小时内最好，最好不要超过24小时
 
 ```
 
-注： rdb 对数字这一块的解码操作要特别注意，不一定能用 BitConverter.ToIntXX 来获得正确的值！！ 
-
 
 ## 贡献
 
@@ -356,7 +359,7 @@ A: 缓存时间设置1小时内最好，最好不要超过24小时
 
 对本项目参考的开源项目和资料，再次表示感谢，感谢大家对开源社区的贡献！ 
 
-感谢您Star，感谢诸位兄弟/姐妹对此项目的支持。个人维护精力有限，欢迎Pr或加入项目组，一起维护！
+感谢诸位兄弟/姐妹对此项目的支持。因个人维护精力有限，欢迎Pr或加入项目组，让该工具得以持续！
 
 
 ## License

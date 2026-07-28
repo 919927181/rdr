@@ -51,7 +51,7 @@ func Export_All_Keys(cli *cli.Context) {
 	nArgs := cli.NArg()
 	for i := 0; i < nArgs; i++ {
 		rdb_file := cli.Args().Get(i)
-		fmt.Fprintln(cli.App.Writer, "rdb parse start ...")
+		fmt.Fprintln(cli.App.Writer, "  >> rdb ("+rdb_file+") parse start ...")
 		rdbDecoder := decoder.NewDecoder()
 		go Decode(cli, rdbDecoder, rdb_file)
 		// rdb 解析，会先读基础信息（如rdb版本，aux元属性），然后再去解析key，它是异步解析的，因此这里先等下，等到读出rdb创建时间aux_ctime，再往下执行
@@ -62,8 +62,9 @@ func Export_All_Keys(cli *cli.Context) {
 			time.Sleep(200 * time.Millisecond) //暂停200毫秒
 		}
 		aux_ctime :=rdbDecoder.GetTimestamp()
+		fmt.Fprintln(cli.App.Writer, "  >> ctime of "+rdb_file+" is "+ strconv.FormatInt(aux_ctime,10))
 
-		fmt.Fprintln(cli.App.Writer, "write to file start ...")
+		fmt.Fprintln(cli.App.Writer, "  >> write to file start ...")
 		fileWriter.WriteString("key,type,encoding,size,humanizeSize,numOfElem,expiration,expire_seconds,lruIdle,lfuFreq,db\n")
 		for e := range rdbDecoder.Entries {
 			expiryStr := ""  //key的过期时间
@@ -74,12 +75,7 @@ func Export_All_Keys(cli *cli.Context) {
 				// 将差值转换为秒数,转换为字符串，保留0位小数，格式为十进制
 				expire_seconds =strconv.FormatFloat(diff.Seconds(), 'f', 0, 64);
 			}
-			// key的最后一次访问时间,maxmemory-policy配置的淘汰策略是volatile-lru或allkeys-lru,它记录的是Key的最后一次访问时间
-			lruIdleStr := ""
-			if e.LruIdle > 0 {
-				lruIdleStr = time.Unix(0, int64(e.LruIdle)*int64(time.Millisecond)).Format("2006-01-02 15:04:05")
-			}
-
+			// 如果maxmemory-policy配置的淘汰策略是volatile-lru或allkeys-lru,它记录的是该键距离上次访问的空闲时间（idle time），单位是秒
 			rowWords := []string{
 				e.Key,
 				e.Type,
@@ -89,7 +85,7 @@ func Export_All_Keys(cli *cli.Context) {
 				strconv.FormatUint(e.NumOfElem, 10),
 				expiryStr,
 				expire_seconds,
-				lruIdleStr,
+				strconv.FormatUint(e.LruIdle,10),
 				strconv.Itoa(e.LfuFreq),
 				strconv.Itoa(e.Db),
 			}
@@ -101,7 +97,7 @@ func Export_All_Keys(cli *cli.Context) {
 
 	end_milliseconds := time.Now().UnixMilli()
 	fmt.Printf("export finished, all keys have write to file ./%s.\n", exportFileName)
-	fmt.Printf("time use %d ms.\n", (end_milliseconds - start_milliseconds))
+	fmt.Printf("time use %d ms. \n", (end_milliseconds - start_milliseconds))
 
 }
 

@@ -588,6 +588,7 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
 		d.info.Encoding = "quicklist2"
 		d.info.Zips = length
 		d.info.ListPacks = 0
+		d.info.SizeOfValue = 0
 		d.event.StartList(key, int64(-1), expiry, d.info)
 		for length > 0 {
 			length--

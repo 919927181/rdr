@@ -229,7 +229,7 @@ func (d *Decoder) Hset(key, field, value []byte) {
 		e.Bytes += d.m.SizeofString(value)
 		e.Bytes += d.m.HashTableEntryOverHead()
 
-		if d.rdbVer < 10 {
+		if d.rdbVer < 8 {
 			e.Bytes += 2 * d.m.RobjOverHead()
 		}
 	}
@@ -287,7 +287,9 @@ func (d *Decoder) Sadd(key, member []byte) {
 		e.Bytes += d.m.SizeofString(member)
 		e.Bytes += d.m.HashTableEntryOverHead()
 
-		if d.rdbVer < 10 {
+		// 从redis4.0（rdb v8）开始，不再计算 RobjOverHead()，集合内的元素的key不再有单独的 robj
+	    // Redis 4.0 将集合底层哈希表（hashtable）的键（key）从通用的 robj 对象，替换为了更轻量的 sds（简单动态字符串），从而省去了每个元素额外的 robj 结构体开
+		if d.rdbVer < 8 {
 			e.Bytes += d.m.RobjOverHead()
 		}
 	}
@@ -345,15 +347,13 @@ func (d *Decoder) Rpush(key, value []byte, NodeEncodings uint64) {
 		}
 		e.Bytes += d.m.LinkedListEntryOverHead()
 		e.Bytes += sizeInlist
-		if d.rdbVer < 10 {
+		if d.rdbVer < 8 {
 			e.Bytes += d.m.RobjOverHead()
 		}
 	case "quicklist2":
 		//quickListNodeContainerPacked=2的则在EndList中计算
 		if NodeEncodings == 1 {
-			if _, err := strconv.ParseInt(string(value), 10, 32); err != nil {
 				e.Bytes += d.m.SizeofString(value)
-			}
 		}
 	default:
 		panic(fmt.Sprintf("unknown encoding:%s", d.currentInfo.Encoding))
@@ -382,7 +382,7 @@ func (d *Decoder) EndList(key []byte) {
 		e.Bytes += d.m.QuickList2OverHead()
 		e.Bytes += d.m.RobjOverHead() * d.currentInfo.ListPacks
 		//fmt.Printf("2、quicklist2 OverHead use memory  %d for string key %s\n", int(d.m.QuickList2OverHead() + d.m.RobjOverHead() * d.currentInfo.Zips), string(key))
-        //quickListNodeContainerPlain类型计算在Rpush，listPackElements计算在EndList
+		//quickListNodeContainerPlain类型计算在Rpush，listPackElements计算在EndList
 		if d.currentInfo.SizeOfValue > 0 {
 			e.Bytes += uint64(d.currentInfo.SizeOfValue)
 			//fmt.Printf("3、SizeOfValue use memory  %d for string key %s\n", uint64(d.currentInfo.SizeOfValue), string(key))
@@ -397,6 +397,7 @@ func (d *Decoder) EndList(key []byte) {
 
 	d.sendEntry()
 }
+
 
 // StartZSet is called at the beginning of a sorted set.
 // Zadd will be called exactly cardinality times before EndZSet.
@@ -443,7 +444,7 @@ func (d *Decoder) Zadd(key []byte, score float64, member []byte) {
 		e.Bytes += d.m.SizeofString(member)
 		e.Bytes += d.m.SkipListEntryOverHead()
 
-		if d.rdbVer < 10 {
+		if d.rdbVer < 8 {
 			e.Bytes += d.m.RobjOverHead()
 		}
 	}

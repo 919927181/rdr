@@ -18,10 +18,11 @@ import (
 	"math/rand"
 	"sort"
 	"strconv"
+	"unsafe"
 )
 
 var (
-	skiplistMaxLevel    = 64
+	skiplistMaxLevel    = 32
 	skiplistP           = 0.25
 	redisSharedInterges = int64(10000)
 	longSize            = uint64(8)
@@ -57,14 +58,18 @@ var (
 		8070450532247928832, 9223372036854775808, 11529215046068469760, 13835058055282163712, 16140901064495857664,
 	}
 )
+// 常量说明：
+// redisSharedInterges代表共享整数范围的上限（如 Redis 中默认是 10000，即 0~9999 的整数会被共享），如果存的是小于1万的整数，那么会用共享内存，在计算key的大小时不需要额外计费
+
 
 // MemProfiler get memory use for all kinds of data stuct
 type MemProfiler struct{}
 
 // mallocOverhead used memory
 func (m *MemProfiler) mallocOverhead(size uint64) uint64 {
-	idx := sort.Search(len(jemallocSizeClasses),
-		func(i int) bool { return jemallocSizeClasses[i] >= size })
+	idx := sort.Search(len(jemallocSizeClasses), func(i int) bool {
+		return jemallocSizeClasses[i] >= size
+	})
 	if idx < len(jemallocSizeClasses) {
 		return jemallocSizeClasses[idx]
 	}
@@ -130,7 +135,9 @@ func (m *MemProfiler) StreamNACK(length uint64) uint64 {
 //	    struct dictEntry *next;
 //	} dictEntry;
 func (m *MemProfiler) HashTableEntryOverHead() uint64 {
-	return 3 * pointerSize
+     // See  https://github.com/antirez/redis/blob/unstable/src/dict.h
+	// Each dictEntry has 2 pointers + int64
+	return 2*pointerSize + 8
 }
 
 // LinkedListOverHead get memory use of a linked list
@@ -165,6 +172,8 @@ func (m *MemProfiler) QuickListOverHead(size uint64) uint64 {
 
 func (m *MemProfiler) QuickList2OverHead() uint64 {
 	return 2*pointerSize + 2*8 + 2*4
+	// https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/quicklist.h#L60
+	//return 3*pointerSize + 8 + 4 ????
 }
 
 func (m *MemProfiler) ListPackEntryOverHead() uint64 {
@@ -225,47 +234,85 @@ func (m *MemProfiler) KeyExpiryOverhead(expiry int64) uint64 {
 	return m.HashTableEntryOverHead() + 8
 }
 
-// RobjOverHead get memory usage of a robj
-//
-//	typedef struct redisobject {
-//	    unsigned type:4;
-//	    unsigned encoding:4;
-//	    unsigned lru:lru_bits; /* lru time (relative to server.lruclock) */
-//	    int refcount;
-//	    void *ptr;
-//	} robj;
-//
+// RobjOverhead get memory useage of a robj
+// typedef struct redisobject {
+//     unsigned type:4;
+//     unsigned encoding:4;
+//     unsigned lru:lru_bits; /* lru time (relative to server.lruclock) */
+//     int refcount;
+//     void *ptr;
+// } robj;
 // 在 Redis 的底层实现中，每个键值对都对应一个 redisObject 结构，该结构包含一个 lru 字段，用于记录对象最后一次被访问的时间戳。‌默认值是 24 个比特位
 const LRU_BITS = 24
 
 func (m *MemProfiler) RobjOverHead() uint64 {
-	return pointerSize + 4 + 4 + LRU_BITS + 4
+	return pointerSize + 4 + 4
 }
+
+// BytesToInt64Fast 零拷贝转换，性能更高，但需确保字节切片在转换期间不被修改
+func BytesToInt64Fast(b []byte) (int64, bool) {
+    // unsafe.String 直接借用 []byte 底层内存，无拷贝
+    s := unsafe.String(unsafe.SliceData(b), len(b))
+    num, err := strconv.ParseInt(s, 10, 64)
+    if err != nil {
+        return 0, false
+    }
+    return num, true
+}
+
+// 定义字符串的头部字节数
+const (
+    sdsHdr5Len = 1
+    sdsHdr8Len = 3
+    sdsHdr16Len = 5
+    sdsHdr32Len = 9
+    sdsHdr64Len = 17
+    nullTerminator = 1
+)
 
 // SizeofString get memory use of a string
 // https://github.com/antirez/redis/blob/unstable/src/sds.h
 func (m *MemProfiler) SizeofString(bytes []byte) uint64 {
-	str := string(bytes)
+    // 先计算长度，不依赖转换后的 str
+    size := uint64(len(bytes))
+
+	str := string(bytes)  //string(bytes) 会发生一次完整的内存拷贝（分配新内存，复制数据）,strconv.ParseInt只接受字符串参数，暂时先这样
+	_, err := strconv.ParseInt(str, 10, 64)
+	if err == nil {
+		// REDIS_SHARED_INTEGERS
+		return 0
+	}
+
+	/*
 	num, err := strconv.ParseInt(str, 10, 64)
 	if err == nil {
-		if num < redisSharedInterges && num > 0 {
+		// 判断是否为共享整数，共享整数范围的上限（如 Redis 中默认是 10000，即 0~9999 的整数会被共享）
+		if num < redisSharedInterges  {
+			return 0
+		} else {
+			//# the integer is part of the robj, no extra memory
+			// 2026-7-27 记：
+			// 对于大于等于 10000 的数字：每个数字会作为一个独立的 redisObject 存储，其 ptr 指针直接指向整数值，值本身占用 8 个字
+			// 返回8，在redis7.0之前的版本，和 memory usage 算出的相等，但是 redis7.4下，又高于了memory usage
 			return 0
 		}
-		return 8
-	}
-	size := uint64(len(str))
-	//return m.mallocOverhead(size + 8 + 1)
+	} */
+
+	// 以下是字符串处理,总分配内存字节数 = 头部大小 (Header) + alloc (buf容量) + 1 (末尾的 '\0')
 	if size < 32 { // 2^5
-		return m.mallocOverhead(size + 1 + 1)
+		return m.mallocOverhead(size + sdsHdr5Len + 1)
 	} else if size < 256 { // 2^8
-		return m.mallocOverhead(size + 2 + 1)
-	} else if size < 25536 { // 2^16
-		return m.mallocOverhead(size + 1 + 4 + 1)
+		return m.mallocOverhead(size + sdsHdr8Len  + 1)
+	} else if size < 65536 { // 2^16
+		return m.mallocOverhead(size + sdsHdr16Len + 1)
 	} else if size < 4294967296 { // 2^32
-		return m.mallocOverhead(size + 1 + 8 + 1)
+		return m.mallocOverhead(size + sdsHdr32Len + 1)
+	} else {
+		return m.mallocOverhead(size + sdsHdr64Len + 1)
 	}
-	return m.mallocOverhead(size + 1 + 16 + 1)
+
 }
+
 
 // ElemLen get length of a element
 func (m *MemProfiler) ElemLen(element []byte) uint64 {

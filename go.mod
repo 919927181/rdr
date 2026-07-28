@@ -1,6 +1,6 @@
 module github.com/919927181/rdr
 
-go 1.18
+go 1.21
 
 require (
 	github.com/919927181/rdb v1.0.8
