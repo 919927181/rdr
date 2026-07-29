@@ -456,7 +456,7 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
 		Freq: d.lfuFreq,
 	}
 	// 调试
-	//fmt.Printf("object type %d for key %s\n", typ, string(key))
+	// 	fmt.Printf("object type %d for key %s\n", typ, string(key))
 
 	switch typ {
 	case TypeString:
@@ -583,8 +583,9 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+		// https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/quicklist.h#L60
 		// 内存占用计算，对比了github.com/HDT3213/rdb/blob/master/memprofiler/memprofiler.go
-		// 节点类型为quickListNodeContainerPlain类的内存计算在Rpush，listpack计算在EndList
+		// 节点类型为 quickListNodeContainerPlain 类的内存计算在Rpush，listpack计算在EndList
 		d.info.Encoding = "quicklist2"
 		d.info.Zips = length
 		d.info.ListPacks = 0
@@ -605,11 +606,19 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
 				d.event.Rpush(key, value, containerType)
 			} else if int(containerType) == quickListNodeContainerPacked {
 				listPackElements, buf := structure.ReadListpack2(d.r)
-				d.info.SizeOfValue += int(buf) //Quicklist是有1个或多个quickListNode组成的链表，因在EndList中计算内存占用， 这儿进行累加
+				// Quicklist是有1个或多个quickListNode组成的链表,quickListNode 自身不存数据，而是指向底层的listpack
+				// listpack overhead: <total_bytes><size>...<end>，total_bytes记录的是整个 listpack 占用的总字节数，size是记录 listpack 中元素的个数
+				// 因在EndList中计算listpck的内存占用，这儿进行累加
+				d.info.SizeOfValue += int(buf)
+                // 调试
+				//fmt.Printf(" listPackElements  use memory  %d for string meber %s\n", buf,listPackElements)
+
+				// 遍历lispck中的元素列表，对于rdr来说没用，因rdr计算的是total_bytes
 				for _, value2 := range listPackElements {
 					bytes := []byte(value2)
 					d.event.Rpush(key, bytes, containerType)
 				}
+
 				d.info.ListPacks ++
 			} else {
 				log.Panicf("unknown quicklist container %d", containerType)

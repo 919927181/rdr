@@ -172,8 +172,9 @@ func (m *MemProfiler) QuickListOverHead(size uint64) uint64 {
 
 func (m *MemProfiler) QuickList2OverHead() uint64 {
 	return 2*pointerSize + 2*8 + 2*4
+	// redis7源码中 QuickList 和 quicklistNode 定义的结构体大小是32字节，考虑到位域（bit fields）和内存对齐带来的额外开销，记40
 	// https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/quicklist.h#L60
-	//return 3*pointerSize + 8 + 4 ????
+	//return 3*pointerSize + 8 + 4
 }
 
 func (m *MemProfiler) ListPackEntryOverHead() uint64 {

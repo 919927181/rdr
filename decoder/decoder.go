@@ -310,7 +310,6 @@ func (d *Decoder) StartList(key []byte, length, expiry int64, info *rdb.Info) {
 	d.currentInfo = info
 	bytes := d.m.TopLevelObjOverhead(key, expiry)
 
-
 	//bug here length would be -4 if it is quicklist2
 	//bytes += d.m.QuickList2OverHead() + (d.m.RobjOverHead() * uint64(length))
 
@@ -379,18 +378,14 @@ func (d *Decoder) EndList(key []byte) {
 	case "linkedlist":
 		e.Bytes += d.m.LinkedListOverHead()
 	case "quicklist2":
-		e.Bytes += d.m.QuickList2OverHead()
-		e.Bytes += d.m.RobjOverHead() * d.currentInfo.ListPacks
-		//fmt.Printf("2、quicklist2 OverHead use memory  %d for string key %s\n", int(d.m.QuickList2OverHead() + d.m.RobjOverHead() * d.currentInfo.Zips), string(key))
-		//quickListNodeContainerPlain类型计算在Rpush，listPackElements计算在EndList
+		e.Bytes += d.m.QuickList2OverHead()  // quicklist 结构体（表头）的大小，固定值40字节
+		e.Bytes += d.m.QuickList2OverHead() * d.currentInfo.ListPacks  // 每个quicklistNode节点的结构体大小 * 节点个数
+        // sizeOfQuickist2= quicklist 结构体（表头）的大小 + 所有节点结构体的大小 + 实际存储数据的listpack 或原始字符串
+		// quickListNodeContainerPlain类型计算在Rpush，listPackElements计算在EndList
 		if d.currentInfo.SizeOfValue > 0 {
 			e.Bytes += uint64(d.currentInfo.SizeOfValue)
 			//fmt.Printf("3、SizeOfValue use memory  %d for string key %s\n", uint64(d.currentInfo.SizeOfValue), string(key))
 		}
-		// github.com/linyue515/rdr 在是在方法上传参过来的
-		// if info.SizeOfValue > 0 {
-		// 	e.Bytes += uint64(info.SizeOfValue)
-		// }
 	default:
 		panic(fmt.Sprintf("unknown encoding:%s", d.currentInfo.Encoding))
 	}
