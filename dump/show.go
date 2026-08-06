@@ -100,7 +100,7 @@ func Show(c *cli.Context) {
 
 					if !counters.Check(filename) {
 						decoder := decoder.NewDecoder()
-						start_milliseconds := time.Now().UnixMilli()
+						startMilliseconds := time.Now().UnixMilli()
 						fmt.Fprintf(c.App.Writer, "start to parse %v \n", filename)
 						go Decode(c, decoder, v)
                         // rdb 解析，会先读基础信息（如rdb版本，aux元属性），然后再去解析key，它是异步解析的，因此这里先等下，等到读出rdb创建时间aux_ctime，再去执行count
@@ -114,8 +114,8 @@ func Show(c *cli.Context) {
 						counter := NewCounter(counterConfig)
 						counter.Count(decoder.Entries)
 						counters.Set(filename, counter)
-						end_milliseconds := time.Now().UnixMilli()
-						fmt.Fprintf(c.App.Writer, "parse %v done, time use %d ms.\n", filename, (end_milliseconds - start_milliseconds))
+						endMilliseconds := time.Now().UnixMilli()
+						fmt.Fprintf(c.App.Writer, "parse %v done, time use %d ms.\n", filename, (endMilliseconds - startMilliseconds))
 						instances = append(instances, filename)
 						// init html template
 						// init common data in template

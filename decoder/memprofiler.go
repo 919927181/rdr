@@ -18,7 +18,6 @@ import (
 	"math/rand"
 	"sort"
 	"strconv"
-	"unsafe"
 )
 
 var (
@@ -250,16 +249,6 @@ func (m *MemProfiler) RobjOverHead() uint64 {
 	return pointerSize + 4 + 4
 }
 
-// BytesToInt64Fast 零拷贝转换，性能更高，但需确保字节切片在转换期间不被修改
-func BytesToInt64Fast(b []byte) (int64, bool) {
-    // unsafe.String 直接借用 []byte 底层内存，无拷贝
-    s := unsafe.String(unsafe.SliceData(b), len(b))
-    num, err := strconv.ParseInt(s, 10, 64)
-    if err != nil {
-        return 0, false
-    }
-    return num, true
-}
 
 // 定义字符串的头部字节数
 const (

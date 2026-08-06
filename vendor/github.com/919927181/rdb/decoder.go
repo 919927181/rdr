@@ -113,10 +113,6 @@ func verifyDump(d []byte) error {
 	if len(d) < 10 {
 		return fmt.Errorf("rdb: invalid dump length")
 	}
-	version := binary.LittleEndian.Uint16(d[len(d)-10:])
-	if version > uint16(rdbVersion) {
-		return fmt.Errorf("rdb: invalid version %d, expecting %d", version, rdbVersion)
-	}
 
 	if binary.LittleEndian.Uint64(d[len(d)-8:]) != crc64.Digest(d[:len(d)-8]) {
 		return fmt.Errorf("rdb: invalid CRC checksum")
@@ -127,7 +123,7 @@ func verifyDump(d []byte) error {
 
 // Decode parses a RDB file from r and calls the decode hooks on d.
 func Decode(r io.Reader, d Decoder) error {
-	decoder := &decode{d, make([]byte, 8), bufio.NewReader(r), 0, 0, nil, 0}
+	decoder := &decode{d, make([]byte, 8), bufio.NewReader(r), 0, 0, nil, 0, false}
 	return decoder.decode() //传指针，用指针作为receiver
 }
 
@@ -140,7 +136,7 @@ func DecodeDump(dump []byte, db int, key []byte, expiry int64, d Decoder) error 
 		return errors.Trace(err)
 	}
 
-	decoder := &decode{d, make([]byte, 8), bytes.NewReader(dump[1:]), 0, 0, nil, 0}
+	decoder := &decode{d, make([]byte, 8), bytes.NewReader(dump[1:]), 0, 0, nil, 0, false}
 	decoder.event.StartRDB(0)
 	decoder.event.StartDatabase(db)
 
@@ -166,6 +162,7 @@ type decode struct {
 
 	info       *Info
 	rdbVersion int
+	isValkey   bool
 }
 
 // ValueType of redis type
@@ -206,21 +203,38 @@ const (
 	TypeStreamListPacks3 ValueType = 21 // RDB_TYPE_STREAM_LISTPACKS_3
 
 	// https://github.com/redis/redis/pull/13391
-	TypeHashMetadataPreGa ValueType = 22 // RDB_TYPE_HASH_METADATA_PRE_GA
-	TypeHashListPackExPre ValueType = 23 // RDB_TYPE_HASH_LISTPACK_EX_PRE_GA
-	TypeHashMetaData      ValueType = 24 // RDB_TYPE_HASH_METADATA
-	TypeHashListPackEx    ValueType = 25 // RDB_TYPE_HASH_LISTPACK_EX
+	TypeHashMetaDataPreGa22 ValueType = 22 // RDB_TYPE_HASH_METADATA_PRE_GA
+	TypeHashListPackExPre23 ValueType = 23 // RDB_TYPE_HASH_LISTPACK_EX_PRE_GA
+	TypeHashMetaData24      ValueType = 24 // RDB_TYPE_HASH_METADATA
+	TypeHashListPackEx25    ValueType = 25 // RDB_TYPE_HASH_LISTPACK_EX
 
+	TypeStreamListPacks_4 ValueType = 26 // Stream with IDMP support (RDB 13, stream_v4)
+	TypeStreamListPacks_5 ValueType = 27 // Stream with XNACK support (NACKed entries) (RDB 14, stream_v5)
+
+	TypeArray             ValueType = 28 /* Array data type */
+    TypeHashTmplLp        ValueType = 29 /* TMPL_LP, self-contained (DUMP): [count][f0]...[fN-1][lp_blob] */
+    TypeHashTmplLpRRF     ValueType = 30 /* TMPL_LP, with template ref (RDB save): raw lp blob, first entry is tid */
+    TypeHashTmplArray     ValueType = 31 /* TMPL_ARRAY, self-contained (DUMP): [count][f0][v0]...[fN-1][vN-1] */
+	TypeHashTmplArrayREF  ValueType = 32 /* TMPL_ARRAY, with template ref (RDB save): [tid][v0]...[vN-1] */
+    TypeGcra  ValueType = 33    /* GCRA object 从 Redis 8.8 版本开始，内置了基于 GCRA 算法的限流器*/
+)
+
+// 在checkHeader中判断rdb版本，我已注释掉判断
+const (
+	maxVersionRedis = 16
+	maxVersionValkey = 80  //Valkey 9.0
 )
 
 const (
-	rdbVersion  = 20
 	rdb6bitLen  = 0
 	rdb14bitLen = 1
 	rdb32bitLen = 0x80
 	rdb64bitLen = 0x81
 	rdbEncVal   = 3
 	rdbLenErr   = math.MaxUint64
+
+	kFlagMeta  = 243 // Key metadata (module metadata classes) (RDB 13)
+
 	//rdb v1.0.5 add for redis7
 	kFlagSlotInfo  = 244 // (Redis 7.4) RDB_OPCODE_SLOT_INFO: slot info
 	kFlagFunction2 = 245 // RDB_OPCODE_FUNCTION2: function library data
@@ -334,9 +348,39 @@ func (d *decode) decode() error {
 	for {
 		objType, err := d.r.ReadByte()
 		if err != nil {
-			return errors.Wrap(err, errors.New("readfailed"))
+			return errors.Wrap(err, errors.New("read failed"))
 		}
 		switch objType {
+		case kFlagMeta:
+			 // 243:{Valkey:SlotImport, Redis 8.0+:RDB_OPCODE_KEY_META}
+			if d.isValkey {
+				// Valkey 9+: slot import state
+				job, err := d.readString()
+				if err != nil {
+					return errors.Trace(err)
+				}
+				num_slot_ranges, _, err := d.readLength()
+				if err != nil {
+					return errors.Trace(err)
+				}
+				var slot_from, slot_to uint64
+				ranges := make([]string, num_slot_ranges)
+				for i := uint64(0); i < num_slot_ranges; i++ {
+					slot_from, _, err = d.readLength()
+					if err == nil {
+						slot_to, _, err = d.readLength()
+					}
+					if err != nil {
+						return errors.Trace(err)
+					}
+					ranges[i] = fmt.Sprintf("%d-%d", slot_from, slot_to)
+				}
+				_, _ = job, ranges // safe to skip
+			} else {
+				// Redis 8.0+: RDB_OPCODE_KEY_META (same opcode value 243)
+				// Not yet supported; return error to avoid silent data corruption
+				return fmt.Errorf("unsupported opcode: RDB_OPCODE_KEY_META (243) in Redis RDB version %d", d.rdbVersion)
+			}
 		case kFlagSlotInfo:
 			_, _, _ = d.readLength() // slot_id
 			_, _, _ = d.readLength() // slot_size
@@ -433,11 +477,13 @@ func (d *decode) decode() error {
 				opcode = structure.ReadLength(d.r)
 			}
 		default:
+			/* Read key */
 			key, err := d.readString()
 			if err != nil {
 				return errors.Trace(err)
 			}
-			err = d.readObject(key, ValueType(objType), expiry)
+			 /* Read value */
+			err= d.readObject(key, ValueType(objType), expiry)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -456,7 +502,9 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
 		Freq: d.lfuFreq,
 	}
 	// 调试
-	// 	fmt.Printf("object type %d for key %s\n", typ, string(key))
+	// if string(key) == "xxx" {
+    //     fmt.Printf("object type %d for key %s\n", typ, string(key))
+	// }
 
 	switch typ {
 	case TypeString:
@@ -579,54 +627,9 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
 		return d.readModule(key, expiry)
 	//TypeListQuickList2、TypeHashListPack、TypeZsetListPack、TypeSetListPack 参考的阿里云长期维护的RedisShake
 	case TypeListQuickList2:
-		length, _, err := d.readLength()
-		if err != nil {
-			return errors.Trace(err)
-		}
-		// https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/quicklist.h#L60
-		// 内存占用计算，对比了github.com/HDT3213/rdb/blob/master/memprofiler/memprofiler.go
-		// 节点类型为 quickListNodeContainerPlain 类的内存计算在Rpush，listpack计算在EndList
-		d.info.Encoding = "quicklist2"
-		d.info.Zips = length
-		d.info.ListPacks = 0
-		d.info.SizeOfValue = 0
-		d.event.StartList(key, int64(-1), expiry, d.info)
-		for length > 0 {
-			length--
-
-			containerType, _, err2 := d.readLength()
-			if err2 != nil {
-				return errors.Trace(err)
-			}
-			if int(containerType) == quickListNodeContainerPlain {
-				value, err := d.readString()
-				if err != nil {
-					return errors.Trace(err)
-				}
-				d.event.Rpush(key, value, containerType)
-			} else if int(containerType) == quickListNodeContainerPacked {
-				listPackElements, buf := structure.ReadListpack2(d.r)
-				// Quicklist是有1个或多个quickListNode组成的链表,quickListNode 自身不存数据，而是指向底层的listpack
-				// listpack overhead: <total_bytes><size>...<end>，total_bytes记录的是整个 listpack 占用的总字节数，size是记录 listpack 中元素的个数
-				// 因在EndList中计算listpck的内存占用，这儿进行累加
-				d.info.SizeOfValue += int(buf)
-                // 调试
-				//fmt.Printf(" listPackElements  use memory  %d for string meber %s\n", buf,listPackElements)
-
-				// 遍历lispck中的元素列表，对于rdr来说没用，因rdr计算的是total_bytes
-				for _, value2 := range listPackElements {
-					bytes := []byte(value2)
-					d.event.Rpush(key, bytes, containerType)
-				}
-
-				d.info.ListPacks ++
-			} else {
-				log.Panicf("unknown quicklist container %d", containerType)
-			}
-		}
-		d.event.EndList(key)
+		return errors.Trace(d.readQuickList2(key, expiry))
 	case TypeHashListPack:
-		list, buf := structure.ReadListpack2(d.r)
+		list, buf := structure.ReadListPack2(d.r)
 		size := len(list)
 		d.info.Encoding = "listpack"
 		d.info.SizeOfValue = int(buf)
@@ -640,7 +643,7 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
 		}
 		d.event.EndHash(key)
 	case TypeZSetListPack:
-		list, buf := structure.ReadListpack2(d.r)
+		list, buf := structure.ReadListPack2(d.r)
 		size := len(list)
 		if size%2 != 0 {
 			log.Panicf("zset listpack size is not even. size=[%d]", size)
@@ -657,7 +660,7 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
 		}
 		d.event.EndZSet(key)
 	case TypeSetListPack:
-		elements, buf := structure.ReadListpack2(d.r)
+		elements, buf := structure.ReadListPack2(d.r)
 		size := len(elements)
 		d.info.Encoding = "listpack"
 		d.info.SizeOfValue = int(buf)
@@ -671,19 +674,26 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
 		return errors.Trace(d.readStreamListPacks(rdbStream2Version,key, expiry))
 	case TypeStreamListPacks3:
 		return errors.Trace(d.readStreamListPacks(rdbStream3Version,key, expiry))
-	case TypeHashMetadataPreGa:
-		return errors.Trace(d.readHashTtl(key, expiry, true))
-	case TypeHashListPackExPre:
-		return errors.Trace(d.readHashTtl(key, expiry, true))
-	case TypeHashMetaData:
-		return errors.Trace(d.readHashListPackTtl(key, expiry, false))
-	case TypeHashListPackEx:
+	case TypeHashMetaDataPreGa22:
+		// Type 22: Redis uses RDB_TYPE_HASH_METADATA_PRE_GA, Valkey uses RDB_TYPE_HASH_2
+		if d.isValkey {
+			// Valkey 9+ Hash2: absolute timestamps after each field-value pair 过期时间戳在value的后面
+			return errors.Trace(d.readHashExValkey(key, expiry)) // Valkey 9.0 HASH_2 format: field, value, TTL (8-byte ms)
+		} else {
+			return errors.Trace(d.readHashTtl(key, expiry, true)) // Redis 8.0 format: TTL (length), field, value
+		}
+	case TypeHashListPackExPre23:
+		return errors.Trace(d.readHashListPackTtl(key, expiry, true))
+	case TypeHashMetaData24:
+		return errors.Trace(d.readHashTtl(key, expiry, false))
+	case TypeHashListPackEx25:
 		return errors.Trace(d.readHashListPackTtl(key, expiry, false))
 	default:
 		return fmt.Errorf("rdb: unknown object type %d for key %s", typ, key)
 	}
 	return nil
 }
+
 
 func (d *decode) readModule(key []byte, expiry int64) error {
 	moduleid, _, err := d.readLength()
@@ -1319,25 +1329,47 @@ func (d *decode) readIntset(key []byte, expiry int64) error {
 	return nil
 }
 
+
 func (d *decode) checkHeader() error {
+	// magic + version
 	header := make([]byte, 9)
 	_, err := io.ReadFull(d.r, header)
+	if err == io.EOF {
+		return errors.New("empty file")
+	}
 	if err != nil {
-		return errors.Trace(err)
+		return fmt.Errorf("io error: %v", err)
 	}
 
-	if !bytes.Equal(header[:5], []byte("REDIS")) {
-		return fmt.Errorf("rdb: invalid file format")
+	var version int
+	if bytes.Equal(header[:5], []byte("REDIS")) {
+		// Redis format: "REDIS" (5 bytes) + version (4 bytes), e.g., "REDIS0012"
+		version, err = strconv.Atoi(string(header[5:]))
+		d.isValkey = false
+	} else if bytes.Equal(header[:6], []byte("VALKEY")) {
+		// Valkey 9.0+ format: "VALKEY" (6 bytes) + version (3 bytes), e.g., "VALKEY080"
+		version, err = strconv.Atoi(string(header[6:]))
+		d.isValkey = true
+	} else {
+		log.Panicf("verify magic string, invalid file format. bytes=[%v]", header[:6])
 	}
 
-	version, _ := strconv.ParseInt(string(header[5:]), 10, 64)
-	if version < 1 || version > rdbVersion {
-		return fmt.Errorf("rdb: invalid RDB version number %d", version)
+	if err != nil {
+		log.Panicf("%v", err)
 	}
+
+    // if !d.isValkey && (version > maxVersionRedis) {
+	// 	return fmt.Errorf("cannot parse version: %d", version)
+	// }
+	// if d.isvalkey && (version > maxVersionValkey) {
+	// 	return fmt.Errorf("cannot parse version: %d", version)
+	// }
 
 	d.rdbVersion = int(version)
 	return nil
+
 }
+
 
 func (d *decode) readString() ([]byte, error) {
 	length, encoded, err := d.readLength()
@@ -1556,6 +1588,57 @@ func lzfDecompress(in []byte, outlen int) []byte {
 	return out
 }
 
+// Redis7.0使用listpack替代了ziplist
+func (d *decode) readQuickList2(key []byte, expiry int64) error {
+    length, _, err := d.readLength()
+    if err != nil {
+		return errors.Trace(err)
+    }
+    // https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/quicklist.h#L60
+    // 内存占用计算，对比了github.com/HDT3213/rdb/blob/master/memprofiler/memprofiler.go
+    // 节点类型为 quickListNodeContainerPlain 类的内存计算在Rpush，listpack计算在EndList
+    d.info.Encoding = "quicklist2"
+    d.info.Zips = length
+    d.info.ListPacks = 0
+    d.info.SizeOfValue = 0
+    d.event.StartList(key, int64(-1), expiry, d.info)
+    for length > 0 {
+		length--
+
+		containerType, _, err2 := d.readLength()
+		if err2 != nil {
+			return errors.Trace(err)
+		}
+		if int(containerType) == quickListNodeContainerPlain {
+			value, err := d.readString()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		d.event.Rpush(key, value, containerType)
+		} else if int(containerType) == quickListNodeContainerPacked {
+			listPackElements, buf := structure.ReadListPack2(d.r)
+			// Quicklist是有1个或多个quickListNode组成的链表,quickListNode 自身不存数据，而是指向底层的listpack
+			// listpack overhead: <total_bytes><size>...<end>，total_bytes记录的是整个 listpack 占用的总字节数，size是记录 listpack 中元素的个数
+			// 因在EndList中计算listpck的内存占用，这儿进行累加
+			d.info.SizeOfValue += int(buf)
+			// 调试
+			//fmt.Printf(" listPackElements  use memory  %d for string meber %s\n", buf,listPackElements)
+
+			// 遍历lispck中的元素列表，对于rdr来说没用，因rdr计算的是total_bytes
+			for _, value2 := range listPackElements {
+				bytes := []byte(value2)
+				d.event.Rpush(key, bytes, containerType)
+			}
+
+			d.info.ListPacks ++
+		} else {
+			log.Panicf("unknown quicklist container %d", containerType)
+		}
+    }
+    d.event.EndList(key)
+    return nil
+}
+
 // 这是 Redis7.4 最新的功能，即为 Hash 中的每个 Field 单独设置过期时间。想想确实有用，以前都是只有整个 Hash key 的过期时间
 func (d *decode) readHashTtl(key []byte, expiry int64, isPre bool) error {
 	rd := d.r
@@ -1566,10 +1649,10 @@ func (d *decode) readHashTtl(key []byte, expiry int64, isPre bool) error {
 		//log.Debugf("%s minExpire is %d", key, minExpire)
 	}
 	size := int(structure.ReadLength(rd))
-	/*size, _, err := d.readLength()
-	  if err != nil {
-	      return errors.Trace(err)
-	  }*/
+	// size, _, err := d.readLength()
+	// if err != nil {
+	// 	return errors.Trace(err)
+	// }
 	d.info.Encoding = "hashtable" //临时处理
 	d.event.StartHash(key, int64(size/2), expiry, d.info)
 	for i := 0; i < int(size); i++ {
@@ -1581,19 +1664,19 @@ func (d *decode) readHashTtl(key []byte, expiry int64, isPre bool) error {
 			}
 		}
 		/*ttl, _, err := d.readLength()
-		  if err != nil {
-		      return errors.Trace(err)
-		  }
+		if err != nil {
+			return errors.Trace(err)
+		}
 
-		  if isPre {
-		      expireAt = int64(ttl)
-		  } else {
-		      if ttl != 0{
-		          expireAt = int64(ttl) + minExpire - 1
-		      } else {
-		          expireAt = 0
-		      }
-		  }*/
+		if isPre {
+			expireAt = int64(ttl)
+		} else {
+			if ttl != 0{
+					expireAt = int64(ttl) + minExpire - 1
+			} else {
+					expireAt = 0
+			}
+		}*/
 
 		fieldStr := structure.ReadString(rd)
 		valueStr := structure.ReadString(rd)
@@ -1602,7 +1685,7 @@ func (d *decode) readHashTtl(key []byte, expiry int64, isPre bool) error {
 		if expireAt != 0 {
 			//为 Hash 中的每个 Field 单独设置过期时间ttl
 			//o.cmdC <- RedisCmd{"hpexpireat", o.key, strconv.FormatInt(expireAt, 10), "fields", "1", key}
-			//因本工具暂时还不支持过期时间分析，后期再处理
+			//因本工具暂不支持对集合类型的元素的过期时间分析，后期再处理
 		}
 		d.event.Hset(key, FiledBytes, ValueBytes)
 
@@ -1617,7 +1700,7 @@ func (d *decode) readHashListPackTtl(key []byte, expiry int64, isPre bool) error
 		// read minExpire
 		_ = int64(structure.ReadUint64(rd))
 	}
-	list, buf := structure.ReadListpack2(rd)
+	list, buf := structure.ReadListPack2(rd)
 	size := len(list)
 	d.info.Encoding = "listpack"
 	d.info.SizeOfValue = int(buf)
@@ -1639,6 +1722,35 @@ func (d *decode) readHashListPackTtl(key []byte, expiry int64, isPre bool) error
 			//因本工具暂时还不支持过期时间分析，后期再处理
 		}
 		d.event.Hset(key, FiledBytes, ValueBytes)
+	}
+
+	d.event.EndHash(key)
+	return nil
+
+}
+// rdr 1.1.18 add
+// readHashValkey reads Valkey 9.0's RDB_TYPE_HASH_2 format
+// Format: size, then for each entry: field (string), value (string), TTL (8-byte ms timestamp)
+func (d *decode) readHashExValkey(key []byte, expiry int64) error {
+	rd := d.r
+	size := int(structure.ReadLength(rd))
+	d.info.Encoding = "hashtable"
+	d.event.StartHash(key, int64(size/2), expiry, d.info)
+
+	for i := 0; i < size; i++ {
+		keyStr := structure.ReadString(rd)
+		valueStr := structure.ReadString(rd)
+		keyBytes := []byte(keyStr)
+		ValueBytes := []byte(valueStr)
+
+		// TTL is stored as 8-byte little-endian millisecond timestamp
+		expireAt := int64(structure.ReadUint64(rd))
+
+		// o.cmdC <- RedisCmd{"hset", o.key, key, value}
+		if expireAt != 0 {
+			// o.cmdC <- RedisCmd{"hpexpireat", o.key, strconv.FormatInt(expireAt, 10), "fields", "1", key}
+		}
+		d.event.Hset(key, keyBytes, ValueBytes)
 	}
 
 	d.event.EndHash(key)

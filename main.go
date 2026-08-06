@@ -15,23 +15,29 @@
 package main
 
 import (
+	"fmt"
+	// _ "net/http/pprof"
+
 	"os"
 
-	"github.com/urfave/cli"
-
-	"fmt"
-
 	"github.com/919927181/rdr/dump"
+	"github.com/urfave/cli"
 )
 
 //go:generate go-bindata -prefix "static/" -o=static/static.go -pkg=static -ignore static.go static/...
 //go:generate go-bindata -prefix "views/" -o=views/views.go -pkg=views -ignore views.go views/...
 
 func main() {
+	// 调试，使用 pprof 进行性能分析，放在这里
+	// runtime.GC()  //调用 runtime.GC() 可以强制进行一次垃圾回收，让profile更准确
+    // go func() {
+    //     log.Println(http.ListenAndServe("127.0.0.1:6060", nil))
+    // }()
+
 	app := cli.NewApp()
 	app.Name = "rdr"
 	app.Usage = "a tool to parse redis rdb file"
-	app.Version = "v1.1.7"
+	app.Version = "v1.1.8"
 	app.Writer = os.Stdout
 	app.ErrWriter = os.Stderr
 	app.Commands = []cli.Command{

@@ -137,19 +137,19 @@ func ToCliWriterToFile(cli *cli.Context) {
 
 	// parse rdb file
 	fmt.Fprintln(cli.App.Writer, "start parsing...")
-	start_milliseconds := time.Now().UnixMilli()
+	startMilliseconds := time.Now().UnixMilli()
 	// 写入内容，换行需要手动加\n
 	writer.WriteString("[\n")
 
 	// parse rdb file
 	nArgs := cli.NArg()
 	for i := 0; i < nArgs; i++ {
-		rdb_file := cli.Args().Get(i)
+		rdbFile := cli.Args().Get(i)
 		rdbDecoder := decoder.NewDecoder()
-		go Decode(cli, rdbDecoder, rdb_file)
+		go Decode(cli, rdbDecoder, rdbFile)
 		cnt := NewCounter(counterConfig)
 		cnt.Count(rdbDecoder.Entries)
-		filename := filepath.Base(rdb_file)
+		filename := filepath.Base(rdbFile)
 		data := GetData(filename, cnt, topN, sizeFilter)
 		data["MemoryUse"] = rdbDecoder.GetUsedMem()
 		data["CTime"] = rdbDecoder.GetTimestamp()
@@ -162,9 +162,9 @@ func ToCliWriterToFile(cli *cli.Context) {
 		}
 	}
 	writer.WriteString("]\n")
-	end_milliseconds := time.Now().UnixMilli()
+	endMilliseconds := time.Now().UnixMilli()
 	fmt.Printf("parsing finished, result write to file ./%s.\n", resultFileName)
-	fmt.Printf("time use %d ms.\n", (end_milliseconds - start_milliseconds))
+	fmt.Printf("time use %d ms.\n", (endMilliseconds - startMilliseconds))
 }
 
 // Decode ...
@@ -218,16 +218,14 @@ func GetData(filename string, cnt *Counter, topN int, sizeFilter int64) map[stri
 	data["LenLevelCount"] = lenLevelCount
 
 	var slotBytesHeap slotHeap
-	for slot, length := range cnt.slotBytes {
-		heap.Push(&slotBytesHeap, &SlotEntry{
-			Slot: slot, Size: length,
-		})
-	}
-
 	var slotSizeHeap slotHeap
-	for slot, size := range cnt.slotNum {
+	// 合并循环：只遍历一次 map 结构，分别取出 Bytes 和 Num 数据压入各自堆中
+	for slot, stat := range cnt.slotStats {
+		heap.Push(&slotBytesHeap, &SlotEntry{
+			Slot: slot, Size: stat.Bytes, // 取 Bytes
+		})
 		heap.Push(&slotSizeHeap, &SlotEntry{
-			Slot: slot, Size: size,
+			Slot: slot, Size: stat.Num,   // 取 Num
 		})
 	}
 

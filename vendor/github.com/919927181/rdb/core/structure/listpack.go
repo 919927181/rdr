@@ -58,7 +58,7 @@ func ReadListpack(rd io.Reader) []string {
 }
 
 // 返回listpack类型的bytes，用于rdb计算内存占用
-func ReadListpack2(rd io.Reader)([]string, uint32) {
+func ReadListPack2(rd io.Reader)([]string, uint32) {
     rd = bufio.NewReader(strings.NewReader(ReadString(rd)))
 
     //_ = ReadUint32(rd) // bytes，即内存占用，

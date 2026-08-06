@@ -41,14 +41,16 @@ RDR(redis data Reveal)是一个用于离线分析 redis rdb 文件的工具。�
 
 ## Support For Redis（redis 版本支持）
 
-支持redis rdb 文件版本为 1 <= version <= 12
-
-  - RDR V1.0.3 支持 Redis6
-  - RDR V1.0.5 支持 Redis7.0+
+  - RDR V1.0.3  支持 Redis6
+  - RDR V1.0.5  支持 Redis7.0+, Valkey 8.x
+  - RDR V1.1.18 支持 Redis8.8+, Valkey(9.0+)
   
 ``` 
 redis rdb版本：
-# Redis-8.x :   `dump_rdb_version=12`
+# Redis-8.10.0 :   `dump_rdb_version=15`
+# Redis-8.8.1 :   `dump_rdb_version=15`
+# Redis-8.6.5  :   `dump_rdb_version=13`
+# Redis-8.4 :   `dump_rdb_version=12`
 # Redis-7.4.x : `dump_rdb_version=12`
 # Redis-7.2.x : `dump_rdb_version=11`
 # Redis-7.0.x : `dump_rdb_version=10`
@@ -59,11 +61,8 @@ redis rdb版本：
 ``` 
     
  备注：
-  - 针对redis7+版本，rdb文件解析主要是解决listpack数据类型问题。
   - RDR的核心依赖是 rdb 文件解析，不同版本redis，其 rdb 文件存在差异，也会增加新的数据类型，存在数据兼容性问题。
-    - 如果解析高版本redis时出现错误，可以尝试使用 RedisShake 数据迁移工具，迁到低版本redis后，再用rdr进行分析。
-	
- 注意：我们通常不用redis消息队列功能，考虑到有人用了，在v1.1.2版本做了支持，注意，我没做对比验证。
+  - 如果解析高版本时出现错误，可以在测试实例上删除不支持的类型key，或使用 RedisShake 数据迁移工具，迁到低版本实例后，再用rdr进行分析。
 
 ## Change（重点版本）
 - caiqing0204：增加了key所属DB，这样可以更直观的查看key元信息。
@@ -171,14 +170,14 @@ $ GOGC=200 ./rdr-linux show -p 8099 dump.rdb
 $ GOGC=200 ./rdr-linux show -p 8099 -n 100 -s 10kb dump.rdb
 
 # 从v1.1.4版本起：
+  - 支持使用 -sep 参数传入前缀分割符，默认为':;,_- '。
   - 前缀分析时，默认会进行动态收缩，防止前缀对象创建越多（xxx业务名:uuid），内存使用就越多，内存不足就会导致执行不完。
-  - 支持传入前缀分割符，默认为':;,_- '。
-$ GOGC=200 ./rdr-linux show -p 8099 pn 500 psn 5000 pmn 50000 dump.rdb
+$ GOGC=200 ./rdr-linux show -p 8099 -pn 500 -psn 5000 -pmn 50000 dump.rdb
 参数说明：
   - spa true 前缀分析时，前缀对象数量不进行动态缩容；默认fasle
-  - tpn 前缀数量，默认值500
-  - psn 预缩容数量，默认值5000
-  - pmn 前缀容器的最大容量，默认值50000
+  - pn  前缀Top数量，默认值500
+  - pmn 前缀容器的容量上限，可以理解为最大水位线，超标时就要泄洪到正常水位线，默认值50000，若你主机内存小，则设小点
+  - psn 前缀容器的预缩容数量，可以理解为正常水位线，默认值5000，建议设为容量上限的 10%\30%\50%，避免频繁触发
   
 ```
 Note that the memory usage is approximate.
@@ -194,14 +193,14 @@ $ GOGC=200 ./rdr-linux  dump2file  dump.rdb
 $ GOGC=200 ./rdr-linux  dump2file -n 100 -s 10kb  dump.rdb
 
 # 从v1.1.4版本起：
+  - 支持使用 -sep 参数传入前缀分割符，默认为':;,_- '。
   - 前缀分析时，默认会进行动态收缩，防止前缀对象创建越多，内存使用就越多，内存不足就会导致执行不完。
-  - 支持传入前缀分割符，默认为':;,_- '。
-$ GOGC=200 ./rdr-linux dump2file pn 500 psn 5000 pmn 50000 dump.rdb
+$ GOGC=200 ./rdr-linux dump2file -pn 500 -psn 5000 -pmn 50000 dump.rdb
 参数说明：
   - spa true 前缀分析时，前缀对象数量不进行动态缩容；默认fasle
   - pn  前缀Top数量，默认值500
-  - psn 预缩容数量，默认值5000
-  - pmn 前缀容器的最大容量，默认值50000
+  - pmn 前缀容器的容量上限，可以理解为最大水位线，超标时就要泄洪到正常水位线，默认值50000，若你主机内存小，则设小点
+  - psn 前缀容器的预缩容数量，可以理解为正常水位线，默认值5000，建议设为容量上限的 10%\30%\50%，避免频繁触发
   
 ```
 
@@ -239,6 +238,10 @@ CREATE TABLE rdb_keys_infor (
 ## 常见问题
 
 ```
+Q:rdr 一直执行不完，free -m 显示内存不足（看available列：系统真正可用的内存），怎么办？
+A:使用符合自身实情的分隔符或将前缀分析的动态收缩机制的参数调小，防止因创建的前缀对象太多，导致内存不足。
+  建议使用8C\16GB的机器。如果不能解决，则使用 pprof 分析内存占用或联系我们。
+
 Q：为什么rdr算的内存大小和使用 memory usage 命令查的结果不一致？
 A：不一致是预期内的正常现象，rdr是基于RDB文件进行的离线估算，其实命令查的结果也是非精准值，在容量治理和故障排查的“战场”上，大可放心使用。
 
@@ -249,12 +252,12 @@ Q：为什么Redis缓存分析中String类型Key的元素数量和元素长度�
 A：在Redis缓存分析中，针对String类型的Key，其元素数量就是其元素长度。集合类。
 
 Q：Redis缓存分析的前缀分隔符是什么？
-A：目前Redis缓存分析的前缀分隔符，默认为":;,_- "，V1.1.4起支持传递参数。
+A：目前Redis缓存分析的前缀分隔符，默认为":;,_-@#. "，V1.1.4起支持传递参数。
 
 Q：通常redis集群只会用到db0,单例中可能会用多个槽。那么当不同db里有相同前缀的key时，前缀分析列表该如何显示所属db？
 A: 从v1.0.9版本起，将所有所属的db都进行了显示，多个以逗号隔开。
 
-Q：我想看每个db或某个db的占用内存大小，怎么看？
+Q：想看每个db或某个db的占用内存大小，怎么看？
 A: 导出所有key信息后自行分析。
 
 Q：rdr是如何计算的Key过期时间？

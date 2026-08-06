@@ -1,0 +1,107 @@
+
+#### 1、rdb 文件解析参考
+
+  rdr工具的核心部分就是rdb文件解析，作为开发者，我们可以通过以下几个途径来掌握相关知识：
+
+  1. 大部分 rdb 文件的解析都是按照:
+     - https://github.com/sripathikrishnan/redis-rdb-tools/wiki/Redis-RDB-Dump-File-Format
+     - https://github.com/cupcake/rdb
+
+  2. Redis迁移工具RedisShake（语言golang），由阿里云 Tair 团队长期维护， 从 RDB 文件中读取数据写入目标端，我们可以参考它这块的代码。
+     项目地址：https://github.com/tair-opensource/RedisShake
+     rdb.go源码地址：https://github.com/tair-opensource/RedisShake/tree/v4/internal/rdb
+
+  3. RDB 文件格式说明：https://www.cnblogs.com/Finley/p/16251360.html 
+
+  4. redis 源码
+```
+  rdb.c 文件：https://github.com/redis/redis/blob/7.0-rc3/src/rdb.c     // RDB 文件读写，行1736：robj *rdbLoadObject
+  rdb.h 文件：https://github.com/redis/redis/blob/unstable/src/rdb.h   // RDB version、RDB object types 等定义
+
+```
+
+小结：
+        - Redis 官网：https://github.com/redis/redis/blob/unstable/src/rdb.h
+        - RedisShake：internal/rdb/
+                                                   |-- rdb.go       # rdb文件解析的主文件
+                                                   |-- /types/interface.go  #  （底层数据存储结构，也称为底层编码） 类型的接口定义文件
+---
+
+
+#### 2、rdb解析之参照redis源码
+
+  rdb.c 文件：https://github.com/redis/redis/blob/7.0-rc3/src/rdb.c     // RDB 读写的实现者，行1736：robj *rdbLoadObject
+  rdb.h 文件：https://github.com/redis/redis/blob/7.0-rc3/src/rdb.h    // RDB 的接口人，RDB version、RDB object types 等定义
+
+  备注：C语言项目，记住一句口诀：“声明放 .h，定义放 .c，暴露给别人的接口放 .h，自己偷偷用的函数加 static 放 .c。” 
+
+-----------------------------------------------------------------------------------------------------------------------------
+  redis 源码                                                                                                            （对应的) rdr
+-----------------------------------------------------------------------------------------------------------------------------
+\src\redis-check-rdb.c 检查reb的合法性                                                              \rdb\decoder.go\checkHeader
+                                                                                                                                                                   ↑
+rdb.c> rdbLoadRioWithLoadingCtxInternal 加载 RDB 文件                               \rdb\decoder.go> decodedecode()
+                       ↓                                                                                                                                             ↓
+rdb.c>rdbLoadObject    /* Read value, 从指定文件加载指定类型的redis对象           \rdb\decoder.go> readObject
+
+rio.c     * 读取：从流中读取                                                                                          io.
+
+----
+/* Load an RDB file from the rio stream 'rdb'. On success C_OK is returned,
+static int rdbLoadRioWithLoadingCtxInternal(rio *rdb, int rdbflags, rdbSaveInfo *rsi, rdbLoadingCtx *rdb_loading_ctx) {
+
+      ....
+
+      /* Read type. */
+        if ((type = rdbLoadType(rdb)) == -1) goto eoferr;   // 读一个字节的数据，对应golang的流对象d.r.ReadByte()
+
+        /* Handle special types. */
+        if (type == RDB_OPCODE_EXPIRETIME) {
+            expiretime = rdbLoadTime(rdb);
+            expiretime *= 1000;
+            keyMetaSpecAdd(&keyMeta, KEY_META_ID_EXPIRE, expiretime);
+            if (rioGetReadError(rdb)) goto eoferr;
+            continue; /* Read next opcode. */
+       } else if ....
+        
+       } else if (type == RDB_OPCODE_IDLE) {
+            /* IDLE: LRU idle time. */
+            uint64_t qword;
+            if ((qword = rdbLoadLen(rdb,NULL)) == RDB_LENERR) goto eoferr;             //---rdr：idle, _, err := d.readLength()
+            lru_idle = qword;
+            continue; /* Read next opcode. */
+        }
+        ....
+
+        /* With metadata, type = RDB_OPCODE_KEY_META. Layout: [<META>,]<TYPE>,<KEY>,<VALUE> */
+        if (rdbResolveKeyType(rdb, &type, dbid, &keyMeta) == -1) 
+            goto eoferr;
+
+        /* Read key */
+        if ((key = rdbGenericLoadStringObject(rdb,RDB_LOAD_SDS,NULL)) == NULL) {
+            keyMetaSpecCleanup(&keyMeta);
+            goto eoferr;
+        }
+        /* Read value */
+        val = rdbLoadObject(type,rdb,key,db->id,&error);
+
+        ......
+}
+
+time_t rdbLoadTime(rio *rdb) {
+    int32_t t32;
+    if (rioRead(rdb,&t32,4) == 0) return -1;    // 从 rio 对象 r 中读取 len 字节到 buf，这里是读4个字节的数据
+    return (time_t)t32;
+}
+
+------------------------------------ rdr中的io.ReadFull函数，对应redis的rioRead函数---------------------------------------------------------
+
+		case rdbOpCodeExpiry:
+			_, err := io.ReadFull(d.r, d.intBuf[:4])
+			if err != nil {
+				return errors.Trace(err)
+			}
+			expiry = int64(binary.LittleEndian.Uint32(d.intBuf)) * 1000
+
+-------------------------------------rdr：idle, _, err := d.readLength()，对应redis中的 rdbLoadLen(rdb,NULL)---------------------------------
+
