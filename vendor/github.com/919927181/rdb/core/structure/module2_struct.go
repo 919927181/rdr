@@ -3,10 +3,12 @@ package structure
 import (
 	"fmt"
 	"io"
-	"log"
 	"strconv"
+
+	"github.com/919927181/rdb/internal/log"
 )
 
+// core 下面的来自阿里云的RedisShake
 const (
     rdbModuleOpcodeEOF    = 0 // End of module value.
     rdbModuleOpcodeSINT   = 1 // Signed integer.
@@ -61,9 +63,32 @@ func ReadModuleString(rd io.Reader) string {
     return ReadString(rd)
 }
 
-func ReadModuleEof(rd io.Reader) {
+func ReadModuleEOF(rd io.Reader) {
     eof := ReadLength(rd)
     if eof != rdbModuleOpcodeEOF {
         log.Panicf("The RDB file is not teminated by the proper module value EOF marker")
     }
+}
+
+// SkipModuleAuxData skips module aux data； 对应 rdbOpCodeModuleAux 247的处理
+func SkipModuleAuxData(rd io.Reader) error {
+	opcode := ReadLength(rd)
+	for opcode != rdbModuleOpcodeEOF {
+		switch opcode {
+			case rdbModuleOpcodeSINT, rdbModuleOpcodeUINT:
+				_ = ReadLength(rd)
+			case rdbModuleOpcodeFLOAT:
+				_ = ReadFloat(rd)
+			case rdbModuleOpcodeDOUBLE:
+				_ = ReadDouble(rd)
+			case rdbModuleOpcodeSTRING:
+				_ = ReadString(rd)
+			default:
+				log.Panicf("unknown module opcode %d",  opcode)
+		}
+		// 读取下一个 opcode
+		opcode = ReadLength(rd)
+	}
+
+    return nil
 }

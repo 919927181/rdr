@@ -105,7 +105,7 @@ func (o *BloomObject) LoadFromBuffer(rd io.Reader, key string, typeByte byte) {
 		sb.filters = append(sb.filters, lb)
 	}
 	o.sb = sb
-	structure.ReadModuleEof(rd)
+	structure.ReadModuleEOF(rd)
 }
 
 func readUnsigned(rd io.Reader) uint64 {

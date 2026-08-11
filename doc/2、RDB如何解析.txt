@@ -15,16 +15,40 @@
 
   4. redis 源码
 ```
-  rdb.c 文件：https://github.com/redis/redis/blob/7.0-rc3/src/rdb.c     // RDB 文件读写，行1736：robj *rdbLoadObject
-  rdb.h 文件：https://github.com/redis/redis/blob/unstable/src/rdb.h   // RDB version、RDB object types 等定义
+  rdb.c 文件：https://github.com/redis/redis/blob/7.0-rc3/src/rdb.c       // 为实现者，存放函数的具体实现（函数体） 例如robj *rdbLoadObject  读取数据对象
+  rdb.h 文件：https://github.com/redis/redis/blob/unstable/src/rdb.h   // 为接口人，存放存放函数声明（原型）、类型订阅等。如RDB version、RDB object types 等定义，
 
 ```
 
 小结：
         - Redis 官网：https://github.com/redis/redis/blob/unstable/src/rdb.h
         - RedisShake：internal/rdb/
-                                                   |-- rdb.go       # rdb文件解析的主文件
-                                                   |-- /types/interface.go  #  （底层数据存储结构，也称为底层编码） 类型的接口定义文件
+                                                   |-- rdb.go       # rdb文件解析的主入口文件，定义了 RDB 文件的核心解析器（Decoder）和编码器（Encoder），以及用于读取、解析 RDB 文件的主流程和公共接口
+                                                   |-- /types/interface.go  #  （底层数据存储结构，也称为底层编码） 类型的接口定义文件 
+                                                   |-- /structure/                 # 各类型的rdb解析（读取）函数
+
+---
+1、RedisShake整个工作流程可以概括为以下步骤：
+	启动：rdb.go 作为入口被调用。
+	寻址：rdb.go 从RDB文件中读取一个数据类型标识。
+	创建：根据标识，rdb.go 调用 （interface.go）types.ParseObject 等函数，创建一个具体的类型对象（如 StringObject）。
+	加载：rdb.go 调用该对象的（types\各类型对象，例如 list.go 中的） LoadFromBuffer 方法，而该方法内部会调用 structure 包的函数来解析具体的二进制数
+    
+  至2026-08-10记，RedisShake（2026年4月21日 Release v4.6.1）目前不支持 Redis Stack 模块（如 RedisJSON、RediSearch、RedisTimeSeries、RedisBloom 等）
+
+
+2、https://github.com/HDT3213/rdb 的解析工作流程：
+
+  底层解码：core 包
+           这个包是解析引擎的核心，其中最关键的是 decoder.go 文件。它负责读取RDB文件的二进制数据。
+
+  数据模型：model 包
+         这个包定义了解析后的数据结构。core 包中的解码器会将RDB文件中的各种数据类型（如String、Hash、List等）转换成 model 包中对应的Go结构体。这样，上层应用（如 rdb 命令）就可以方便地处理这些数据，用于生成JSON、内存报告等。
+
+         启动：  decoder.go 文件作为入口被调用，
+         读数：   decoder.go的parse中的 readObject，根据不同的标识，调用相应类型（如string.go）的解析方法【相当于 RedisShake 的structure 包的函数】
+         内存统计：  decoder.go的parse中的 memprofiler.SizeOfObject(obj)
+
 ---
 
 
@@ -45,6 +69,34 @@ rdb.c> rdbLoadRioWithLoadingCtxInternal 加载 RDB 文件                       
 rdb.c>rdbLoadObject    /* Read value, 从指定文件加载指定类型的redis对象           \rdb\decoder.go> readObject
 
 rio.c     * 读取：从流中读取                                                                                          io.
+
+---
+
+rdb.c 的解码（加载）工作流程，本质上是 rdbLoadObject 函数将 RDB 二进制文件还原为内存数据的过程
+
+核心流程如下：
+   1. rdbLoad 是加载流程的总入口，主要职责：接收一个 rio 流对象（代表要加载的RDB数据流），并以此为基础开始整个解码过程。
+   2. 解析文件头：魔数与版本，加载的第一步是验证文件格式并获取版本信息
+   3. 遍历数据库与键值对
+   
+
+3、rdr 对应的 redis rdb 解析函数
+
+------------------------------------------------------------------------------------------------------------------------------------
+  序号      redis                                          作用                                                                     rdr
+------------------------------------------------------------------------------------------------------------------------------------
+ 1. rdbLoadType(rdb)                  io读RDB文件1个字节，用于读取对象类型              objType, err := d.r.ReadByte()
+      示例：
+        /* Read type. */
+        if ((type = rdbLoadType(rdb)) == -1) goto eoferr;
+------------------------------------------------------------------------------------------------------------------------------------
+2. rdbLoadLen(rdb, NULL)        用于从 RDB 流中读取一个长度值                               d.readLength()
+   This is like rdbLoadLenByRef() but directly returns the value read                                                                                         
+------------------------------------------------------------------------------------------------------------------------------------
+3. rioRead(rio *r, void *buf, size_t len)   从 rio 对象 r 中读取 len 字节到 buf              io.ReadFull
+   示例：if (rioRead(rdb,&t32,4) == 0) return -1;    // 这里是读4个字节的数据
+------------------------------------------------------------------------------------------------------------------------------------
+
 
 ----
 /* Load an RDB file from the rio stream 'rdb'. On success C_OK is returned,

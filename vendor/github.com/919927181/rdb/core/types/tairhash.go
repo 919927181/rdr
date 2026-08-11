@@ -41,7 +41,7 @@ func (o *TairHashObject) Rewrite() <-chan RedisCmd {
 					"PXAT", expireText}
 			}
 		}
-		structure.ReadModuleEof(rd)
+		structure.ReadModuleEOF(rd)
 	}()
 	return cmdC
 }

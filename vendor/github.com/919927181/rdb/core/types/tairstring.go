@@ -25,7 +25,7 @@ func (o *TairStringObject) Rewrite() <-chan RedisCmd {
 		version := structure.ReadModuleUnsigned(rd)
 		flags := structure.ReadModuleUnsigned(rd)
 		tairValue := structure.ReadModuleString(rd)
-		structure.ReadModuleEof(rd)
+		structure.ReadModuleEOF(rd)
 		o.cmdC <- RedisCmd{"EXSET", o.key, tairValue, "ABS", version, "FLAGS", flags}
 	}()
 	return o.cmdC

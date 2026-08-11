@@ -47,13 +47,13 @@ RDR(redis data Reveal)是一个用于离线分析 redis rdb 文件的工具。�
   
 ``` 
 redis rdb版本：
-# Redis-8.10.0 :   `dump_rdb_version=15`
-# Redis-8.8.1 :   `dump_rdb_version=15`
-# Redis-8.6.5  :   `dump_rdb_version=13`
-# Redis-8.4 :   `dump_rdb_version=12`
-# Redis-7.4.x : `dump_rdb_version=12`
-# Redis-7.2.x : `dump_rdb_version=11`
-# Redis-7.0.x : `dump_rdb_version=10`
+# Redis-8.10.0 :    `dump_rdb_version=15`
+# Redis-8.8.1 :     `dump_rdb_version=15`
+# Redis-8.6.5  :    `dump_rdb_version=13`
+# Redis-8.4 :       `dump_rdb_version=12`
+# Redis-7.4.x :     `dump_rdb_version=12`
+# Redis-7.2.x :     `dump_rdb_version=11`
+# Redis-7.0.x :     `dump_rdb_version=10`
 # Redis-5.x ~ 6.x : `dump_rdb_version=9`
 # Redis-4.0.x :     `dump_rdb_version=8`
 # Redis-3.2 :       `dump_rdb_version=7`

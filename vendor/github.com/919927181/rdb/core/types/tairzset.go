@@ -37,7 +37,7 @@ func (o *TairZsetObject) Rewrite() <-chan RedisCmd {
 			score := strings.Join(values, "#")
 			cmdC <- RedisCmd{"EXZADD", o.key, score, key}
 		}
-		structure.ReadModuleEof(rd)
+		structure.ReadModuleEOF(rd)
 	}()
 	return cmdC
 }

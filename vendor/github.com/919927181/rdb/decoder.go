@@ -203,15 +203,15 @@ const (
 	TypeStreamListPacks3 ValueType = 21 // RDB_TYPE_STREAM_LISTPACKS_3
 
 	// https://github.com/redis/redis/pull/13391
-	TypeHashMetaDataPreGa22 ValueType = 22 // RDB_TYPE_HASH_METADATA_PRE_GA
+	TypeHashMetaDataPreGa22 ValueType = 22 // Redis use RDB_TYPE_HASH_METADATA_PRE_GA, Valkey9.0 use RDB_TYPE_HASH_2
 	TypeHashListPackExPre23 ValueType = 23 // RDB_TYPE_HASH_LISTPACK_EX_PRE_GA
-	TypeHashMetaData24      ValueType = 24 // RDB_TYPE_HASH_METADATA
+	TypeHashMetaData24      ValueType = 24 // RDB_TYPE_HASH_METADATA /* Hash with HFEs. Attach min TTL at start */
 	TypeHashListPackEx25    ValueType = 25 // RDB_TYPE_HASH_LISTPACK_EX
 
-	TypeStreamListPacks_4 ValueType = 26 // Stream with IDMP support (RDB 13, stream_v4)
-	TypeStreamListPacks_5 ValueType = 27 // Stream with XNACK support (NACKed entries) (RDB 14, stream_v5)
+	TypeStreamListPacks4 ValueType = 26 // Stream with IDMP support (RDB 13, stream_v4)
+	TypeStreamListPacks5 ValueType = 27 // Stream with XNACK support (NACKed entries) (RDB 14, stream_v5)
 
-	TypeArray             ValueType = 28 /* Array data type */
+	TypeArray             ValueType = 28 /* Array data type, RDB 15*/
     TypeHashTmplLp        ValueType = 29 /* TMPL_LP, self-contained (DUMP): [count][f0]...[fN-1][lp_blob] */
     TypeHashTmplLpRRF     ValueType = 30 /* TMPL_LP, with template ref (RDB save): raw lp blob, first entry is tid */
     TypeHashTmplArray     ValueType = 31 /* TMPL_ARRAY, self-contained (DUMP): [count][f0][v0]...[fN-1][vN-1] */
@@ -220,9 +220,15 @@ const (
 )
 
 // 在checkHeader中判断rdb版本，我已注释掉判断
+// const (
+// 	maxVersionRedis = 16
+// 	maxVersionValkey = 80  //Valkey 9.0
+// )
+
 const (
-	maxVersionRedis = 16
-	maxVersionValkey = 80  //Valkey 9.0
+	EB_EXPIRE_TIME_MAX     int64 = 0x0000FFFFFFFFFFFF
+	EB_EXPIRE_TIME_INVALID int64 = EB_EXPIRE_TIME_MAX + 1
+	HFE_MAX_ABS_TIME_MSEC  int64 = EB_EXPIRE_TIME_MAX >> 2
 )
 
 const (
@@ -233,8 +239,7 @@ const (
 	rdbEncVal   = 3
 	rdbLenErr   = math.MaxUint64
 
-	kFlagMeta  = 243 // Key metadata (module metadata classes) (RDB 13)
-
+	kFlagMeta  = 243 // redis for RDB_OPCODE_KEY_META Key metadata (module metadata classes, RDB 13)，valkey9.0 for RDB_OPCODE_SLOT_IMPORT 243
 	//rdb v1.0.5 add for redis7
 	kFlagSlotInfo  = 244 // (Redis 7.4) RDB_OPCODE_SLOT_INFO: slot info
 	kFlagFunction2 = 245 // RDB_OPCODE_FUNCTION2: function library data
@@ -359,27 +364,55 @@ func (d *decode) decode() error {
 				if err != nil {
 					return errors.Trace(err)
 				}
-				num_slot_ranges, _, err := d.readLength()
+				numSlotRanges, _, err := d.readLength()
 				if err != nil {
 					return errors.Trace(err)
 				}
-				var slot_from, slot_to uint64
-				ranges := make([]string, num_slot_ranges)
-				for i := uint64(0); i < num_slot_ranges; i++ {
-					slot_from, _, err = d.readLength()
+				var slotFrom, slotTo uint64
+				ranges := make([]string, numSlotRanges)
+				for i := uint64(0); i < numSlotRanges; i++ {
+					slotFrom, _, err = d.readLength()
 					if err == nil {
-						slot_to, _, err = d.readLength()
+						slotTo, _, err = d.readLength()
 					}
 					if err != nil {
 						return errors.Trace(err)
 					}
-					ranges[i] = fmt.Sprintf("%d-%d", slot_from, slot_to)
+					ranges[i] = fmt.Sprintf("%d-%d", slotFrom, slotTo)
 				}
 				_, _ = job, ranges // safe to skip
 			} else {
-				// Redis 8.0+: RDB_OPCODE_KEY_META (same opcode value 243)
-				// Not yet supported; return error to avoid silent data corruption
-				return fmt.Errorf("unsupported opcode: RDB_OPCODE_KEY_META (243) in Redis RDB version %d", d.rdbVersion)
+				// return fmt.Errorf("unsupported opcode: RDB_OPCODE_KEY_META (243) in Redis RDB version %d", d.rdbVersion)
+				/* RDB_OPCODE_KEY_META (RDB 13，opcode value 243): 该操作码用于在键值对前附加元数据.*/
+				// 当一个模块（比如 RedisJSON、RediSearch）创建了自己的数据类型时，它可能需要将一些额外的、非标准的元数据（如索引信息、字段定义等）和键值一起持久化
+				/* With metadata, type = RDB_OPCODE_KEY_META. Layout: [<META>,]<TYPE>,<KEY>,<VALUE> */
+				//大致排列：[RDB_OPCODE_KEY_META] [numClasses] [Class1_ID] [Class1_Data] [Class2_ID] [Class2_Data] ... [实际对象类型] [Key] [Value]
+
+				// 1. 跳过元数据
+				if err = d.skipKeyMeta(); err != nil {
+					return err
+				}
+				// 2. 读取实际对象类型
+				actualTypeByte, err := d.r.ReadByte()
+				if err != nil {
+					return err
+				}
+				// _ = actualTypeByte
+				actualType := int(actualTypeByte)
+				// 4. 读取 key
+				key, err := d.readString()
+				if err != nil {
+					return errors.Trace(err)
+				}
+				// 5. 读取 value（使用 actualType 和当前的 expiry）
+				if err := d.readObject(key, ValueType(actualType), expiry); err != nil {
+					return errors.Trace(err)
+				}
+				// 6. 重置辅助状态
+				expiry = 0
+				d.lruIdle = 0
+				d.lfuFreq = 0
+				/* Read next opcode. */
 			}
 		case kFlagSlotInfo:
 			_, _, _ = d.readLength() // slot_id
@@ -454,7 +487,8 @@ func (d *decode) decode() error {
 			d.event.EndRDB()
 			return nil
 		case rdbOpCodeModuleAux:
-			//return errors.Errorf("unsupport module")
+			/* AUX: Auxiliary data for modules. */
+			// skip module
 			moduleId := structure.ReadLength(d.r) // module id
 			moduleName := types.ModuleTypeNameByID(moduleId)
 			log.Debugf("RDB module aux: module_id=[%d], module_name=[%s]", moduleId, moduleName)
@@ -474,6 +508,7 @@ func (d *decode) decode() error {
 				default:
 					log.Panicf("module aux opcode not found. module_name=[%s], opcode=[%d]", moduleName, opcode)
 				}
+				// 读取下一个 opcode
 				opcode = structure.ReadLength(d.r)
 			}
 		default:
@@ -482,6 +517,7 @@ func (d *decode) decode() error {
 			if err != nil {
 				return errors.Trace(err)
 			}
+
 			 /* Read value */
 			err= d.readObject(key, ValueType(objType), expiry)
 			if err != nil {
@@ -501,6 +537,7 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
 		Idle: d.lruIdle,
 		Freq: d.lfuFreq,
 	}
+
 	// 调试
 	// if string(key) == "xxx" {
     //     fmt.Printf("object type %d for key %s\n", typ, string(key))
@@ -694,13 +731,23 @@ func (d *decode) readObject(key []byte, typ ValueType, expiry int64) error {
 	return nil
 }
 
-
 func (d *decode) readModule(key []byte, expiry int64) error {
-	moduleid, _, err := d.readLength()
-	if err != nil {
-		return errors.Trace(err)
-	}
-	return fmt.Errorf("Not supported load module %v", moduleid)
+    moduleid, _, err := d.readLength()
+    if err != nil {
+        return errors.Trace(err)
+    }
+    ModuleTypeName := types.ModuleTypeNameByID(moduleid)
+
+    // 关键：跳过整个模块的辅助数据（Aux Data），因为我这来是跳过模块解析，因此不关心模块的版本号了
+    if err := structure.SkipModuleAuxData(d.r); err != nil {
+        return fmt.Errorf("skip module aux data failed for key %s, type %s: %v", key, ModuleTypeName, err)
+    }
+
+    // 如果想记录日志（可选），在这里打印：
+    // log.Warnf("Skipped module data for key %s, type: %s", key, ModuleTypeName)
+
+    // 返回 nil，表示成功跳过，继续解析下一个键
+    return nil
 }
 
 func (d *decode) readStream(key []byte, expiry int64) error {
@@ -1621,9 +1668,6 @@ func (d *decode) readQuickList2(key []byte, expiry int64) error {
 			// listpack overhead: <total_bytes><size>...<end>，total_bytes记录的是整个 listpack 占用的总字节数，size是记录 listpack 中元素的个数
 			// 因在EndList中计算listpck的内存占用，这儿进行累加
 			d.info.SizeOfValue += int(buf)
-			// 调试
-			//fmt.Printf(" listPackElements  use memory  %d for string meber %s\n", buf,listPackElements)
-
 			// 遍历lispck中的元素列表，对于rdr来说没用，因rdr计算的是total_bytes
 			for _, value2 := range listPackElements {
 				bytes := []byte(value2)
@@ -1642,10 +1686,11 @@ func (d *decode) readQuickList2(key []byte, expiry int64) error {
 // 这是 Redis7.4 最新的功能，即为 Hash 中的每个 Field 单独设置过期时间。想想确实有用，以前都是只有整个 Hash key 的过期时间
 func (d *decode) readHashTtl(key []byte, expiry int64, isPre bool) error {
 	rd := d.r
-	var minExpire int64
-	//var expireAt int64
+	var minExpire int64 = EB_EXPIRE_TIME_INVALID
+	// var expireAt  int64
+	//RDB_TYPE_HASH_METADATA 24 ,/* Hash with HFEs. Attach min TTL at start */
 	if !isPre {
-		minExpire = int64(structure.ReadUint64(rd))
+		minExpire = int64(structure.ReadUint64(rd))  // 等同于 d.ReadUint64()
 		//log.Debugf("%s minExpire is %d", key, minExpire)
 	}
 	size := int(structure.ReadLength(rd))
@@ -1719,7 +1764,7 @@ func (d *decode) readHashListPackTtl(key []byte, expiry int64, isPre bool) error
 		if expireAt != 0 {
 			//为 Hash 中的每个 Field 单独设置过期时间ttl
 			//o.cmdC <- RedisCmd{"hpexpireat", o.key, strconv.FormatInt(expireAt, 10), "fields", "1", key}
-			//因本工具暂时还不支持过期时间分析，后期再处理
+			//因本工具暂时还不支持对集合的元素进行过期时间分析，后期再处理
 		}
 		d.event.Hset(key, FiledBytes, ValueBytes)
 	}
@@ -1731,6 +1776,8 @@ func (d *decode) readHashListPackTtl(key []byte, expiry int64, isPre bool) error
 // rdr 1.1.18 add
 // readHashValkey reads Valkey 9.0's RDB_TYPE_HASH_2 format
 // Format: size, then for each entry: field (string), value (string), TTL (8-byte ms timestamp)
+// Valkey stores absolute expiration timestamps as int64 after each field-value pair.
+// -1 (or negative) means no TTL, which is normalized to 0.
 func (d *decode) readHashExValkey(key []byte, expiry int64) error {
 	rd := d.r
 	size := int(structure.ReadLength(rd))
@@ -1746,6 +1793,9 @@ func (d *decode) readHashExValkey(key []byte, expiry int64) error {
 		// TTL is stored as 8-byte little-endian millisecond timestamp
 		expireAt := int64(structure.ReadUint64(rd))
 
+		if expireAt < 0 {
+			expireAt = 0 // valkey uses -1 to indicate no TTL
+		}
 		// o.cmdC <- RedisCmd{"hset", o.key, key, value}
 		if expireAt != 0 {
 			// o.cmdC <- RedisCmd{"hpexpireat", o.key, strconv.FormatInt(expireAt, 10), "fields", "1", key}
@@ -1939,4 +1989,27 @@ func (d *decode) readStreamGroups(version int) (StreamGroups, error) {
         groups = append(groups, group)
     }
     return groups, nil
+}
+
+// skipKeyMeta reads and discards key metadata classes (RDB 13).
+// Format: [numClasses] then for each class: [4-byte classSpec] [module-value]
+func (d *decode) skipKeyMeta()  error {
+	numClasses, _, err := d.readLength()
+	if err != nil {
+		return fmt.Errorf("read key meta numClasses failed: %v", err)
+	}
+	for i := uint64(0); i < numClasses; i++ {
+		// read 4-byte classSpec（模块类型 ID）
+		_, err := io.ReadFull(d.r, d.intBuf[:4])
+		if err != nil {
+			return fmt.Errorf("read key meta classSpec failed: %v", err)
+		}
+
+		// skip the module-encoded value
+        if err := structure.SkipModuleAuxData(d.r); err != nil {
+            return fmt.Errorf("skip key meta value failed: %v", err)
+        }
+
+	}
+	return nil
 }
