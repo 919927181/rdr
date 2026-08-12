@@ -30,6 +30,7 @@ type StreamPendingEntry struct {
 	ID            *StreamId
 	DeliveryTime  uint64
 	DeliveryCount uint64
+	IsNack        bool // 新增：标识是否为 NACK zone 条目（无消费者）
 }
 
 type StreamConsumerPendingEntry struct {
@@ -1831,7 +1832,8 @@ func (d *decode) readStreamId() (*StreamId, error) {
 	}, nil
 }
 
-func (d *decode) readStreamListPacks(version int,key []byte, expiry int64) error {
+func (d *decode) readStreamListPacks(version int, key []byte, expiry int64) error {
+	/* 1. Load the number of Listpack. */
 	cardinality, _, err := d.readLength()
     if err != nil {
         return errors.Trace(err)
@@ -1850,35 +1852,77 @@ func (d *decode) readStreamListPacks(version int,key []byte, expiry int64) error
         }
         d.event.Xadd(key, streamID, listpack)
     }
-
+   /* 2. Load total number of items inside the stream. stream length*/
     items, _, err := d.readLength()
     if err != nil {
         return errors.Trace(err)
     }
-	lastId, err := d.readStreamId()
+	/* Load the last entry ID. */
+	lastID, err := d.readStreamId()
 	if err != nil {
 		return errors.Trace(err)
 	}
-	firstId, err := d.readStreamId()
-	if err != nil {
-		return errors.Trace(err)
+    // 3. if version >=2，load Stream object metadata
+    streamMeta := ""
+	if version >=2 {
+		firstID, err := d.readStreamId()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		maxDeletedID, err := d.readStreamId()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		addedCount, _, err := d.readLength()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		streamMeta = fmt.Sprintf("%d-%d-%d-%d",lastID.Sequence, firstID.Sequence, maxDeletedID.Sequence, addedCount)
 	}
-	maxDeletedId, err := d.readStreamId()
-	if err != nil {
-		return errors.Trace(err)
-	}
-	addedCount, _, err := d.readLength()
-	if err != nil {
-		return errors.Trace(err)
-	}
+
+	/* 4. Load streamgroups. */
     groups, err := d.readStreamGroups(version)
     if err != nil {
         return errors.Trace(err)
     }
-	streamMeta := fmt.Sprintf("%d-%d-%d-%d",lastId.Sequence,firstId.Sequence,maxDeletedId.Sequence,addedCount)
+
+	/* 5. Load IDMP (Idempotent Message Producer) configuration and entries
+         for RDB_TYPE_STREAM_LISTPACKS_4 and above. */
+    if version >=4 {
+        // 1. 读取 IDMP duration idmpDuration
+        _, _, err = d.readLength()
+        if err != nil {
+            return errors.Trace(err)
+        }
+        // 2. 读取 IDMP max entries （idmpMaxEntries）
+        _, _, err = d.readLength()
+        if err != nil {
+            return errors.Trace(err)
+        }
+        // 3. 读取所有 IDMP 条目（idmpEntries）
+        _, err = d.readStreamIdmpEntries()
+        if err != nil {
+            return errors.Trace(err)
+        }
+
+        // 4. 读取 iids_added
+        _, _, err = d.readLength()
+        if err != nil {
+            return errors.Trace(err)
+        }
+
+        // 5. 读取 iids_duplicates
+        _, _, err = d.readLength()
+        if err != nil {
+            return errors.Trace(err)
+        }
+
+        /* 此处可调用事件回调，将 IDMP 信息传递给上层（假设 event 接口支持） */
+        // d.event.IDMPInfo(key, idmpDuration, idmpMaxEntries, idmpEntries, iidsAdded, iidsDuplicates)
+	}
+
     d.event.EndStream(key, items, streamMeta, groups)
     return nil
-
 }
 
 func (d *decode) readStreamGroups(version int) (StreamGroups, error) {
@@ -1886,7 +1930,7 @@ func (d *decode) readStreamGroups(version int) (StreamGroups, error) {
     if err != nil {
         return nil, err
     }
-
+    /* Consumer groups loading */
     groups := make(StreamGroups, 0, count)
     for i := 0; i < int(count); i++ {
         group := &StreamGroup{
@@ -1909,29 +1953,30 @@ func (d *decode) readStreamGroups(version int) (StreamGroups, error) {
         if err != nil {
             return nil, err
         }
-		entriesRead, _, err := d.readLength()
-		if err != nil {
-			return nil, err
-		}
+        /* Load group offset. */
+        entriesRead, _, err := d.readLength()
+        if err != nil {
+            return nil, err
+        }
         group.LastEntryId = fmt.Sprintf("%d-%d-%d", gIDms, gIDseq,entriesRead)
-		// 读取PEL
+        // 读取PEL
         pelSize, _, err := d.readLength()
         if err != nil {
             return nil, err
         }
         for j := 0; j < int(pelSize); j++ {
             ms,err:=d.readUint64()
-			if err !=nil {
-				return nil, err
-			}
-			seq,err := d.readUint64()
-			if err !=nil {
-				return nil, err
-			}
-			streamID :=&StreamId{
-				Ms: ms,
-				Sequence: seq,
-			}
+            if err !=nil {
+                return nil, err
+            }
+            seq,err := d.readUint64()
+            if err !=nil {
+                return nil, err
+            }
+            streamID :=&StreamId{
+                Ms: ms,
+                Sequence: seq,
+            }
             deliveryTime, err := d.readUint64()
             if err != nil {
                 return nil, err
@@ -1944,6 +1989,7 @@ func (d *decode) readStreamGroups(version int) (StreamGroups, error) {
                 ID:            streamID,
                 DeliveryTime:  deliveryTime,
                 DeliveryCount: deliveryCount,
+                IsNack:        false, // 默认非NACK，后续根据版本更新
             })
         }
 
@@ -1952,6 +1998,8 @@ func (d *decode) readStreamGroups(version int) (StreamGroups, error) {
         if err != nil {
             return nil, err
         }
+        // 构建消费者ID集合，用于后续NACK验证
+        consumerIDs := make(map[[2]uint64]bool) // key: [ms, seq]
         for j := 0; j < int(consumersNum); j++ {
             consumer := &StreamConsumerData{
                 Pending: make([]*StreamConsumerPendingEntry, 0),
@@ -1964,12 +2012,14 @@ func (d *decode) readStreamGroups(version int) (StreamGroups, error) {
             if err != nil {
                 return nil, err
             }
-			if version >=2 {
-				consumer.ActiveTime,err = d.readUint64()
-				if err != nil {
-					return nil, err
-				}
-			}
+            // consumer->active_time = rdbLoadMillisecondTime(rdb,RDB_VERSION);
+            if version >=3 {
+                consumer.ActiveTime,err = d.readUint64()
+                if err != nil {
+                    return nil, err
+                }
+            }
+            /* Consumer PEL */
             pelSize, _, err := d.readLength()
             if err != nil {
                 return nil, err
@@ -1982,13 +2032,92 @@ func (d *decode) readStreamGroups(version int) (StreamGroups, error) {
                 consumer.Pending = append(consumer.Pending, &StreamConsumerPendingEntry{
                     ID: id,
                 })
+                // 将ID解析为ms和seq，加入消费者ID集合（用于NACK验证）
+                ms := binary.LittleEndian.Uint64(id[0:8])
+                seq := binary.LittleEndian.Uint64(id[8:16])
+                consumerIDs[[2]uint64{ms, seq}] = true
             }
+
             group.Consumers = append(group.Consumers, consumer)
+        }
+
+        /* For RDB_TYPE_STREAM_LISTPACKS_5 and above, load the NACK */
+        // ----- version >= 5：处理 NACK zone -----
+        if version >= 5 {
+            nackedCount, _, err := d.readLength()
+            if err != nil {
+                return nil, err
+            }
+            for n := uint64(0); n < nackedCount; n++ {
+                rawID := make([]byte, 16)
+                if _, err := io.ReadFull(d.r, rawID); err != nil {
+                    return nil, err
+                }
+                ms := binary.LittleEndian.Uint64(rawID[0:8])
+                seq := binary.LittleEndian.Uint64(rawID[8:16])
+
+                // 在组 PEL 中查找匹配条目
+                var foundEntry *StreamPendingEntry
+                for _, entry := range group.Pending {
+                    if entry.ID.Ms == ms && entry.ID.Sequence == seq {
+                        foundEntry = entry
+                        break
+                    }
+                }
+                if foundEntry == nil {
+                    return nil, fmt.Errorf("NACK entry ID %d-%d not found in group PEL", ms, seq)
+                }
+                // 检查该条目是否已被某个消费者拥有（不应该出现在消费者PEL中）
+                if _, ok := consumerIDs[[2]uint64{ms, seq}]; ok {
+                    return nil, fmt.Errorf("NACK entry ID %d-%d has consumer assigned, corrupt RDB", ms, seq)
+                }
+                // 标记为 NACK
+                foundEntry.IsNack = true
+            }
+            // 可选：deep_integrity_validation 可在此处遍历所有 PEL 条目，
+            // 确保非 NACK 的条目都有消费者，但本解析器可省略。
         }
 
         groups = append(groups, group)
     }
     return groups, nil
+}
+
+// IDMP 条目结构
+type IDMPEntry struct {
+    IID      string   // 幂等 ID（key）
+    StreamID *StreamId // 对应的消息 ID
+}
+
+// 读取 IDMP 条目列表
+func (d *decode) readStreamIdmpEntries() ([]*IDMPEntry, error) {
+    // 读取条目数量
+    count, _, err := d.readLength()
+    if err != nil {
+        return nil, err
+    }
+    entries := make([]*IDMPEntry, 0, count)
+    for i := uint64(0); i < count; i++ {
+        // 读取 IID（字符串）
+        iidBytes, err := d.readString()
+        if err != nil {
+            return nil, err
+        }
+        // 读取对应的 Stream ID（ms 和 sequence）
+        ms, err := d.readUint64()
+        if err != nil {
+            return nil, err
+        }
+        seq, err := d.readUint64()
+        if err != nil {
+            return nil, err
+        }
+        entries = append(entries, &IDMPEntry{
+            IID:      string(iidBytes),
+            StreamID: &StreamId{Ms: ms, Sequence: seq},
+        })
+    }
+    return entries, nil
 }
 
 // skipKeyMeta reads and discards key metadata classes (RDB 13).

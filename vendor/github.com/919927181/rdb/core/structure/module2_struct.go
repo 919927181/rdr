@@ -3,12 +3,10 @@ package structure
 import (
 	"fmt"
 	"io"
+	"log"
 	"strconv"
-
-	"github.com/919927181/rdb/internal/log"
 )
 
-// core 下面的来自阿里云的RedisShake
 const (
     rdbModuleOpcodeEOF    = 0 // End of module value.
     rdbModuleOpcodeSINT   = 1 // Signed integer.
@@ -92,3 +90,4 @@ func SkipModuleAuxData(rd io.Reader) error {
 
     return nil
 }
+
