@@ -1,0 +1,65 @@
+
+### 1、Redis的数据存储底层实现的变化
+
+  - List (列表)：在 Redis 3.2 版本之后，List 的底层实现从之前的“双向链表”或“压缩列表”变为了 quicklist。
+  - Hash (哈希) / ZSet (有序集合)：从 Redis 7.0 开始，这些类型中曾使用的 ziplist（压缩列表） 被 listpack 所取代
+
+
+---
+
+https://github.com/redis/redis/commits/unstable/src/rdb.h
+---
+
+RDB_VERSION 14 (redis8.10.0)
+
+
+5) 新增 array 数据类型
+
+ https://github.com/redis/redis/commit/2e46d2e7359d71ea0fe4219fd218143b9e7ab03c#diff-59fe4262d529608b0de19622bee9f4f0509ac805630bf9f5d0ede7e5acd5e5d4
+
+#define RDB_TYPE_ARRAY 28                     /* Array data type */
+#ifdef ENABLE_GCRA
+#define RDB_TYPE_GCRA 29                      /* GCRA object */
+
+
+4）Implement the new Redis Array type  （ # 15162  redis8.10.0---8.8-rc1）
+
+#define RDB_TYPE_ARRAY 29                     /* Array data type */
+
+2026 年 5 月 14 日:
+
+3)  Fix decrRefCount on NULL robj on corrupt KEY_META payload  （redis 8.10.0 ... 8.8-m02)
+
+https://github.com/redis/redis/commit/ca6e471a3fe69c7b0af04c7fb6827c6cd88b5a6e#diff-59fe4262d529608b0de19622bee9f4f0509ac805630bf9f5d0ede7e5acd5e5d4
+
+
+2）Add new OBJ_GCRA type
+
+#define RDB_TYPE_GCRA 28                      /* GCRA object */
+
+见：https://github.com/redis/redis/commit/3bcfbbe92a60b28c85a163dd920f6777c974bdc4#diff-59fe4262d529608b0de19622bee9f4f0509ac805630bf9f5d0ede7e5acd5e5d4
+
+1） add: stream_v5
+
+#define RDB_TYPE_STREAM_LISTPACKS_5 27        /* Stream with XNACK support (NACKed entries) */  简称 stream_v5
+
+见：2026 年 4 月 7 日  https://github.com/redis/redis/commit/747dfe578e6d204e288c7915edd919bc791d9d9b#diff-59fe4262d529608b0de19622bee9f4f0509ac805630bf9f5d0ede7e5acd5e5d4
+
+
+------------------------------------------------------------------
+RDB_VERSION 13 （redis 8.10.0，8.6-c1）
+
+
+1）add： stream_v4
+
+#define RDB_TYPE_STREAM_LISTPACKS_4 26        /* Stream with IDMP support */ 简称 stream_v4
+
+（2026 年 1 月 15 日）Add idempotency support to XADD via IDMPAUTO and IDMP parameters：
+        https://github.com/redis/redis/commit/221409788aa6a43e3320b5e1aea2c6a5e640097e#diff-59fe4262d529608b0de19622bee9f4f0509ac805630bf9f5d0ede7e5acd5e5d4
+
+2）add： Modules KeyMeta (Keys Metadata)
+
+      （2026 年 1 月 16 日） https://github.com/redis/redis/commit/11e73c66a8d7368008d6a99f0377583875a25f79#diff-59fe4262d529608b0de19622bee9f4f0509ac805630bf9f5d0ede7e5acd5e5d4
+
+     #define RDB_OPCODE_KEY_META   243   /* Key metadata (module metadata classes). */
+

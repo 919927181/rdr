@@ -81,7 +81,7 @@ type CounterConfig struct {
 	TopPrefixNum int
 	// 前缀容器的最大容量（容量上限），可以理解为最大水位线，到达最大水位线，就要去排出一部分水，容量上限不要太大（如果你的主机内存比较小，就设置小点）
 	PrefixContainerMaxCapacity int
-	// 前缀容器的预缩容数量，可以理解为正常水位线。建议缩容目标 PrefixPreShrinkNum 设为容量上限的 10%\30%\50%，避免频繁触发
+	// 前缀容器每次缩容后保留的前缀数，可以理解为正常水位线。建议缩容目标 PrefixPreShrinkNum 设为容量上限的 10%\30%\50%，避免频繁触发
 	PrefixPreShrinkNum int
 
 	// rdb的创建时间，用于过期剩余时间分析
@@ -366,6 +366,94 @@ func (c *Counter) countBySlot(e *decoder.Entry) {
     }
 }
 
+// getMeaningfulPrefixes 从 key 中提取所有“有意义”的前缀,性能不如 “替换+getPrefixes+过滤”
+// 规则：按分隔符 sep 拆分，依次检查每一段，若某段不含任何数字则将其加入前缀并输出，一旦遇到含数字的段立刻停止。
+// 返回去重后的前缀列表（保持首次出现顺序）
+func getMeaningfulPrefixes(s, sep string) []string {
+	// 1. 拆分得到 parts 和 seps（与原函数一致）
+	var parts []string
+	var seps []string
+	var buf strings.Builder
+	for _, r := range s {
+		if strings.ContainsRune(sep, r) {
+			parts = append(parts, buf.String())
+			seps = append(seps, string(r))
+			buf.Reset()
+		} else {
+			buf.WriteRune(r)
+		}
+	}
+	if buf.Len() > 0 || len(s) == 0 {
+		parts = append(parts, buf.String())
+	}
+
+	// 2. 遍历段，构建前缀
+	var prefixes []string
+	var current strings.Builder   // 高效拼接当前前缀
+
+	for i, part := range parts {
+		if part == "" {
+			continue   // 忽略空段（连续分隔符）
+		}
+
+		// 检查该段是否含数字，并记录第一个数字的位置
+		hasDigit := false
+		firstDigitIdx := -1
+		for idx, r := range part {
+			if r >= '0' && r <= '9' {
+				hasDigit = true
+				if firstDigitIdx == -1 {
+					firstDigitIdx = idx
+				}
+			}
+		}
+
+		if !hasDigit {
+			// 不含数字：正常拼接
+			if current.Len() == 0 {
+				current.Reset()
+				current.WriteString(part)
+			} else {
+				current.WriteString(seps[i-1])
+				current.WriteString(part)
+			}
+			prefixes = append(prefixes, current.String())
+		} else {
+			// 含数字
+			// 情况1：第一段含数字
+			if i == 0 {
+				if firstDigitIdx > 0 {
+					// 数字前有非数字部分，取为前缀
+					prefixPart := part[:firstDigitIdx]
+					current.Reset()
+					current.WriteString(prefixPart)
+					prefixes = append(prefixes, current.String())
+					// 继续处理后续段（不 break）
+				} else {
+					// 数字在开头，无有效前缀，停止（不再处理任何段）
+					break
+				}
+			} else {
+				// 情况2：非第一段含数字 → 停止
+				break
+			}
+		}
+	}
+	// 3. 直接返回 prefixes（不再去重，由外部 map 去重）
+	return prefixes
+
+	// 3. 保序去重
+	// seen := make(map[string]struct{})
+	// result := make([]string, 0, len(prefixes))
+	// for _, p := range prefixes {
+	// 	if _, ok := seen[p]; !ok {
+	// 		seen[p] = struct{}{}
+	// 		result = append(result, p)
+	// 	}
+	// }
+	// return result
+}
+
 // 传入一个entry，根据key名，通过分隔符得到前缀，然后对各前缀进行计数
 func (c *Counter) countByKeyPrefix(e *decoder.Entry) {
 
@@ -377,16 +465,16 @@ func (c *Counter) countByKeyPrefix(e *decoder.Entry) {
 		return c
 	}, e.Key)
 
-	// 1.将key名字进行分割，得到所有前缀字符串
+	// 1.将key名字进行分割，得到所有前缀字符串,
 	prefixes := getPrefixes(k, c.config.Separators)
 
 	key := typeKey{
 		Type: e.Type,
 	}
 
-	// 2.遍历前缀，对其计数
+	// 2.遍历前缀，对其计数，如果前缀包含*则跳过
 	for _, prefixStr := range prefixes {
-		if len(prefixStr) == 0 {
+		if len(prefixStr) == 0 || strings.ContainsRune(prefixStr, '*') {
 			continue
 		}
 
@@ -782,6 +870,42 @@ func getPrefixes(s, sep string) []string {
 	}
 	// ⭐ 可以移除去重调用，直接返回（重复项由外部 map 去重）
     // 之前：res = removeDuplicatesUnordered(res)
+	// res = removeDuplicatesUnordered(res)
+	return res
+}
+
+func getPrefixes2(s, sep string) []string {
+	res := []string{}
+	sepIdx := strings.IndexAny(s, sep)
+	if sepIdx < 0 {
+		// 无分隔符，单独一个段
+		if !strings.ContainsRune(s, '*') {
+			res = append(res, s)
+		}
+		// 若含有 '*' 则直接返回空（因为前缀无效）
+		return res
+	}
+	for sepIdx > -1 {
+		r := s[:sepIdx+1]
+		if len(res) > 0 {
+			r = res[len(res)-1] + s[:sepIdx+1]
+		}
+		// ★ 提前终止：若当前前缀包含 '*'，则后续前缀必然也包含，直接跳出
+		if strings.ContainsRune(r, '*') {
+			break
+		}
+		res = append(res, r)
+		s = s[sepIdx+1:]
+		sepIdx = strings.IndexAny(s, sep)
+	}
+	//Trim all suffix of separators 修剪后缀分隔符
+	for i := range res {
+		for hasAnySuffix(res[i], sep) {
+			res[i] = res[i][:len(res[i])-1]
+		}
+	}
+	// ⭐ 可以移除去重调用，直接返回（重复项由外部 map 去重）
+	// 之前：res = removeDuplicatesUnordered(res)
 	// res = removeDuplicatesUnordered(res)
 	return res
 }
