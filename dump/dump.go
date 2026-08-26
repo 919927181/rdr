@@ -54,6 +54,9 @@ func ToCliWriter(cli *cli.Context) {
 	topN := 100     // top N bigkey (按内存),最大500
 	sizeFilter := 0 // GetLargestEntries 过滤掉小于阈值的key，传0表示不过滤
 
+	// 1. 先创建配置对象
+	counterConfig := NewCounterConfig()
+
 	// parse rdb file
 	fmt.Fprintln(cli.App.Writer, "[")
 	nArgs := cli.NArg()
@@ -61,7 +64,16 @@ func ToCliWriter(cli *cli.Context) {
 		file := cli.Args().Get(i)
 		rdbDecoder := decoder.NewDecoder()
 		go Decode(cli, rdbDecoder, file)
-		cnt := NewCounter(NewCounterConfig())
+		// rdb 解析，会先读基础信息（如rdb版本，aux元属性），然后再去解析key，它是异步解析的，因此这里先等下，等到读出rdb创建时间aux_ctime，再往下执行
+		for {
+			if  rdbDecoder.GetTimestamp() !=0 {
+				break
+			}
+			time.Sleep(200 * time.Millisecond) //暂停200毫秒
+		}
+	    // 2. 再给配置对象的字段赋值（即你写的第一行）
+	    counterConfig.Aux_Ctime = rdbDecoder.GetTimestamp()
+		cnt := NewCounter(counterConfig)
 		cnt.Count(rdbDecoder.Entries)
 		filename := filepath.Base(file)
 		data := GetData(filename, cnt, topN, int64(sizeFilter))
@@ -111,7 +123,8 @@ func ToCliWriterToFile(cli *cli.Context) {
 
 	// Counter config
 	counterConfig := &CounterConfig{
-		TopBigKeyNum:            topN,
+		TopBigKeyByCountByte:    topN,
+		TopBigKeyByCountNum:     topN,
 		StoreAllPrefixes:        storeAllPrefixes,
 		Separators:              separators,
 		TopPrefixNum:            topPrefixN,
@@ -147,6 +160,14 @@ func ToCliWriterToFile(cli *cli.Context) {
 		rdbFile := cli.Args().Get(i)
 		rdbDecoder := decoder.NewDecoder()
 		go Decode(cli, rdbDecoder, rdbFile)
+		// rdb 解析，会先读基础信息（如rdb版本，aux元属性），然后再去解析key，它是异步解析的，因此这里先等下，等到读出rdb创建时间aux_ctime，再往下执行
+		for {
+			if  rdbDecoder.GetTimestamp() !=0 {
+				break
+			}
+			time.Sleep(200 * time.Millisecond) //暂停200毫秒
+		}
+		counterConfig.Aux_Ctime=rdbDecoder.GetTimestamp()
 		cnt := NewCounter(counterConfig)
 		cnt.Count(rdbDecoder.Entries)
 		filename := filepath.Base(rdbFile)
@@ -186,7 +207,8 @@ func Decode(c *cli.Context, decoder *decoder.Decoder, filepath string) {
 func GetData(filename string, cnt *Counter, topN int, sizeFilter int64) map[string]interface{} {
 	data := make(map[string]interface{})
 	data["CurrentInstance"] = filename
-	data["LargestKeys"] = cnt.GetLargestEntries(topN, sizeFilter) //top N bigkey (按内存)，sizeFilter过滤小于阈值的key
+	data["TopBigKeysByCountByte"] = cnt.GetLargestEntries(topN, sizeFilter) //top N bigkey (按内存)，sizeFilter过滤小于阈值的key
+	data["TopBigKeysByCountNum"] = cnt.GetLargestEntriesByCount(topN) //top N bigkey (按元素数量)
 
 	largestKeyPrefixesByType := map[string][]*PrefixEntry{}
 	for _, entry := range cnt.GetLargestKeyPrefixes() {

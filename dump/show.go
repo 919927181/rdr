@@ -78,7 +78,8 @@ func Show(c *cli.Context) {
 
 	// Counter config
 	counterConfig := &CounterConfig{
-		TopBigKeyNum:            topN,
+		TopBigKeyByCountByte:    topN,
+		TopBigKeyByCountNum:     topN,
 		Separators:              separators,
 		StoreAllPrefixes:        storeAllPrefixes,
 		TopPrefixNum:            topPrefixN,

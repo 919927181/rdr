@@ -37,7 +37,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "rdr"
 	app.Usage = "a tool to parse redis rdb file"
-	app.Version = "v1.1.8"
+	app.Version = "v1.1.9"
 	app.Writer = os.Stdout
 	app.ErrWriter = os.Stderr
 	app.Commands = []cli.Command{
@@ -55,7 +55,7 @@ func main() {
 				cli.IntFlag{
 					Name:  "num, n",
 					Value: 300,
-					Usage: " top N big keys, max is 500",
+					Usage: " top N big keys(By Count Byte), max is 500",
 				},
 				cli.StringFlag{
 					Name:  "size, s",

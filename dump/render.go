@@ -47,7 +47,8 @@ func rdbReveal(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	sizeFilter, _ := strconv.ParseInt(data["sizeFilter"].(string), 10, 64)
 
 	data["CurrentInstance"] = path
-	data["LargestKeys"] = counter.GetLargestEntries(topN, sizeFilter) //top N bigkey (按内存),第2个参数过滤掉小于阈值的key，传0表示不过滤
+	data["TopBigKeysByCountByte"] = counter.GetLargestEntries(topN, sizeFilter) //top N bigkey (按内存),第2个参数过滤掉小于阈值的key，传0表示不过滤
+	data["TopBigKeysByCountNum"] = counter.GetLargestEntriesByCount(topN) //top N bigkey (按元素个数)
 
 	largestKeyPrefixesByType := map[string][]*PrefixEntry{}
 	for _, entry := range counter.GetLargestKeyPrefixes() {

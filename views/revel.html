@@ -112,8 +112,10 @@
 </div>
 
 <div class="row">
-    <!--top100 最大keys -->
+
     <div class="col-md-7">
+    <!--Big Keys top N 占用内存最大的 -->
+    <div class="row">
         <section class="content-header">
             <div class="box">
                 <div class="box-body">
@@ -131,7 +133,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {{range $entry := .LargestKeys}}
+                            {{range $entry := .TopBigKeysByCountByte}}
                             <tr>
                                 <td class="limited-width">{{$entry.Key}}</td>
                                 <td>{{$entry.Type}}</td>
@@ -148,7 +150,44 @@
             </div>
         </section>
     </div>
+    <!-- Big Keys top N 除了string类型，元素个数高于5千的 -->
+    <div class="row">
+        <section class="content-header">
+            <div class="box">
+                <div class="box-body">
+                    <center><strong>top {{.TopN}} bigkey (按元素数量，string类型和集合类元素个数小于5千的已被硬过滤掉)</strong></center><br>
+                    <table class="table table-condensed table-hover sortable" style="word-break:break-all; word-wrap:break-all;">
+                        <thead>
+                            <tr style="background-color:#f1f1f1;" align="center">
+                                <td class="sorttable_alpha"> Key </td>
+                                <td class="sorttable_alpha" style="width:80px !important;" align="left"> Type </td>
+                                <td class="sorttable_alpha" style="width:80px !important;" align="left"> Encoding </td>
+                                <td> 元素数量 </td>
+                                <td style="width:100px !important;"> 占用内存 </td>
+                                <td class="sorttable_alpha" style="width:132px !important;"> 过期时间 </td>
+                                <td class="sorttable_numeric" style="width:32px !important;"> Db </td>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range $entry := .TopBigKeysByCountNum}}
+                            <tr>
+                                <td class="limited-width">{{$entry.Key}}</td>
+                                <td>{{$entry.Type}}</td>
+                                <td>{{$entry.Encoding}}</td>
+                                <td align="right" sorttable_customkey="{{$entry.NumOfElem}}">{{humanizeComma $entry.NumOfElem}}</td>
+                                <td align="right" sorttable_customkey="{{$entry.Bytes}}">{{humanizeBytes $entry.Bytes}}</td>
+                                <td style="font-size:11.5px !important;" align="center">{{timestampFormat $entry.Expiration}}</td>
+                                <td>{{$entry.Db}}</td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </div>
 
+    </div>
     <div class="col-md-5">
         <!-- 按key的数据大小分析 -->
         <div class="row">
@@ -257,7 +296,7 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {{range $entry := .LargestKeys}}
+                                        {{range $entry := .TopBigKeysByCountByte}}
                                         <tr>
                                             <td class="limited-width">{{$entry.Key}}</td>
                                             <td>{{$entry.Type}}</td>

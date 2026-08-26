@@ -27,7 +27,9 @@ import (
 // v1.1.4 add
 const (
 
-	DefaultTopBigKeyNum  = 500
+	DefaultTopBigKeyByCountByte  = 500
+	DefaultTopBigKeyByCountNum  = 500
+
 	DefaultSeparators = ":;,_-@# "
 	DefaultStoreAllPrefixes        = false
 	DefaultTopPrefixNum            = 500
@@ -69,8 +71,10 @@ const (
 // v1.1.4 add
 type CounterConfig struct {
 
-	// Bigkey数量阈值，默认 500
-	TopBigKeyNum int
+	// 按内存占用大小的Top N，默认 500
+	TopBigKeyByCountByte int
+    //v1.1.9 add,按元素个数的 Top N，默认 500
+	TopBigKeyByCountNum int
 
 	// key前缀分隔符，默认 ":;,_- "
 	Separators string
@@ -91,7 +95,8 @@ type CounterConfig struct {
 // 默认配置, v1.1.4 add
 func NewCounterConfig() *CounterConfig {
 	return &CounterConfig{
-		TopBigKeyNum:                DefaultTopBigKeyNum,
+		TopBigKeyByCountByte:        DefaultTopBigKeyByCountByte,
+		TopBigKeyByCountNum:         DefaultTopBigKeyByCountNum,
 		Separators:                  DefaultSeparators,
 		StoreAllPrefixes:            DefaultStoreAllPrefixes,
 		TopPrefixNum:                DefaultTopPrefixNum,
@@ -101,17 +106,25 @@ func NewCounterConfig() *CounterConfig {
 	}
 }
 
-// NewCounter 初始化 NewCounter return a pointer of Counter
+// NewCounter 初始化 Counter return a pointer of Counter
 func NewCounter(config *CounterConfig) *Counter {
 	if config == nil {
 		config = NewCounterConfig()
 	}
-	h := &entryHeap{}
-	heap.Init(h)
+	// 创建空的最小堆和槽位 map
+
+    hMem := &entryHeap{}
+    heap.Init(hMem)
+
+    hCnt := &entryHeapByCountNum{}
+    heap.Init(hCnt)
+
 	p := &prefixHeap{}
 	heap.Init(p)
+
 	return &Counter{
-		largestEntries:     h,
+		largestEntries:      hMem,
+        largestEntriesByCnt: hCnt,
 		largestKeyPrefixes: p,
 		lengthLevel0:       100,
 		lengthLevel1:       1000,
@@ -139,7 +152,8 @@ func NewCounter(config *CounterConfig) *Counter {
 
 // Counter 统计器 Counter for redis memory usage
 type Counter struct {
-	largestEntries     *entryHeap
+	largestEntries      *entryHeap
+    largestEntriesByCnt *entryHeapByCountNum   // v1.1.9新增（按元素个数）
 	largestKeyPrefixes *prefixHeap  //保留，用于快速获取topN from heap
 	lengthLevel0       uint64
 	lengthLevel1       uint64
@@ -167,6 +181,7 @@ type SlotStat struct {
 }
 
 // Count by various dimensions，show.go NewCounter 后，调用此方法，遍历decoder的entry, <-chan表示一个只能接收数据的单向通道
+// 从通道中不断读取 decoder.Entry
 func (c *Counter) Count(in <-chan *decoder.Entry) {
 	for e := range in {
 		c.count(e)   //调下面的count方法（串行分析）
@@ -175,16 +190,25 @@ func (c *Counter) Count(in <-chan *decoder.Entry) {
 	c.calcuLargestKeyPrefix(c.config.TopPrefixNum)
 }
 
-// 传入一个entry，执行各指标的count方法
+// 对传入的一个entry，执行各指标的count方法
 func (c *Counter) count(e *decoder.Entry) {
+	// 按内存占用大小的Top N
 	c.countLargestEntries(e, 500)
+	// 统计各类型的key数量和内存占大小
 	c.countByType(e)
+	// 各类型按元素个数进行区间分布分析，例如hash类型:元素个数0~100的有多少个key、占用内存大小
 	c.countByLength(e)
-	c.countByKeyPrefix(e)  //前缀计数
+	// 前缀计数
+	c.countByKeyPrefix(e)
+	// 每个槽位（Slot）的统计信息：Num（Key 数量）和 Bytes（总字节数，内存占用）
 	c.countBySlot(e)
 	// c.countByDb(e) // 该方法由caiqing0204添加，未使用
+	// 过期剩余时间分析
 	c.countByExpire(e)
+	// 按key的内存占用大小，进行区间分析，v1.1.5 add
 	c.countByByte(e)
+	// 新增统计,v1.1.9 add,按元素个数的 Top N，string类型的不参与
+    c.countLargestEntriesByCountNum(e, c.config.TopBigKeyByCountNum)
 
 }
 
@@ -198,21 +222,24 @@ func (c *Counter) count(e *decoder.Entry) {
 // }
 
 // GetLargestEntries from heap, num max is 500. 过滤掉小于阈值的key
-func (c *Counter) GetLargestEntries(num int, sizeFilter int64) []*decoder.Entry {
+func (c *Counter) GetLargestEntries(num int, sizeFilterMin int64) []*decoder.Entry {
 	res := []*decoder.Entry{}
 
 	// get a copy of c.largestEntries
 	for i := 0; i < c.largestEntries.Len(); i++ {
 		entries := *c.largestEntries
 		// 阈值默认为0，当大于0时，将过滤掉小于阈值的key
-		if sizeFilter > 0 {
-			if entries[i].Bytes > uint64(sizeFilter) {
+		if sizeFilterMin > 0 {
+			if entries[i].Bytes > uint64(sizeFilterMin) {
 				res = append(res, entries[i])
 			}
 		} else {
 			res = append(res, entries[i])
 		}
 	}
+	// 对切片 res 中的 *decoder.Entry 元素，按照其内存占用大小（Bytes 字段）进行原地降序排序（从大到小）
+	// Q:为什么这里必须要有这一步排序?
+	// A:虽然 Counter 内部用最小堆（largestEntries）成功保留了内存占用最大的前 N 个 Key，但堆只保证堆顶（索引 0）是最小的，堆内其余元素的顺序是无序的
 	sort.Sort(sort.Reverse(entryHeap(res)))
 	if num < len(res) {
 		res = res[:num]
@@ -249,6 +276,7 @@ func (c *Counter) GetLenLevelCount() []*PrefixEntry {
 	return res
 }
 
+//将 Entry 推入最小堆，若堆大小超过 500，则弹出最小的
 func (c *Counter) countLargestEntries(e *decoder.Entry, num int) {
 	heap.Push(c.largestEntries, e)
 	l := c.largestEntries.Len()
@@ -257,6 +285,7 @@ func (c *Counter) countLargestEntries(e *decoder.Entry, num int) {
 	}
 }
 
+// 各类型按元素个数进行区间分布分析，例如hash类型:元素个数0~100的有多少个key、占用内存大小
 func (c *Counter) countByLength(e *decoder.Entry) {
 	lengthLevelKey := typeKey{
 		Type: e.Type,
@@ -291,6 +320,7 @@ func (c *Counter) countByLength(e *decoder.Entry) {
 
 }
 
+// 按key的类型进行统计，即统计各类型的key数量和内存占大小
 func (c *Counter) countByType(e *decoder.Entry) {
 	c.typeNum[e.Type]++
 	c.typeBytes[e.Type] += e.Bytes
@@ -331,7 +361,7 @@ func (c *Counter) countByExpire(e *decoder.Entry) {
 	}
 }
 
-// 按key的大小，进行区间分析，v1.1.5 add
+// 按key的内存占用大小，进行区间分析，v1.1.5 add
 func (c *Counter) countByByte(e *decoder.Entry) {
 	bytesOfKey := e.Bytes
     tmpByteLevelStr := ByteLevelStr1k
@@ -355,9 +385,9 @@ func (c *Counter) countByByte(e *decoder.Entry) {
 	c.byteLevelBytes[tmpByteLevelStr] += e.Bytes
 }
 
-
+// 每个槽位的统计信息：Num（Key 数量）和 Bytes（总字节数）
 func (c *Counter) countBySlot(e *decoder.Entry) {
-	if len(e.Key) > 0 {
+    if len(e.Key) > 0 {
         slot := Slot(e.Key)
         stat := c.slotStats[slot]
         stat.Num++
@@ -698,7 +728,7 @@ func parseDbSet(s string) map[int]struct{} {
     return m
 }
 
-
+// bigkey top N  (按内存)
 // -------------------- 类型定义 --------------------
 type entryHeap []*decoder.Entry
 
@@ -947,4 +977,56 @@ func (h *slotHeap) Pop() interface{} {
 
 func (h *slotHeap) Push(e interface{}) {
 	*h = append(*h, e.(*SlotEntry))
+}
+
+// 按元素个数维护的最小堆（堆顶元素个数最少）
+type entryHeapByCountNum []*decoder.Entry
+
+func (h entryHeapByCountNum) Len() int           { return len(h) }
+func (h entryHeapByCountNum) Less(i, j int) bool { return h[i].NumOfElem < h[j].NumOfElem }
+func (h entryHeapByCountNum) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+
+func (h *entryHeapByCountNum) Push(x interface{}) {
+    *h = append(*h, x.(*decoder.Entry))
+}
+
+func (h *entryHeapByCountNum) Pop() interface{} {
+    old := *h
+    n := len(old)
+    x := old[n-1]
+    *h = old[0 : n-1]
+    return x
+}
+
+// 新增统计,v1.1.9 add,按元素个数的 Top N，string类型的不参与，元素数量低于5千的忽略
+func (c *Counter) countLargestEntriesByCountNum(e *decoder.Entry, topNum int) {
+    if topNum <= 0 || e.Type == "string" || e.NumOfElem < 5000 {
+        return // 如果配置为 0，则不统计
+    }
+    heap.Push(c.largestEntriesByCnt, e)
+    if c.largestEntriesByCnt.Len() > topNum {
+        heap.Pop(c.largestEntriesByCnt)
+    }
+}
+
+// GetLargestEntriesByCount 返回按元素个数（NumOfElem）降序的前 num 个 Key
+func (c *Counter) GetLargestEntriesByCount(topNum int) []*decoder.Entry {
+    // 复制堆快照（避免并发问题）
+    heapCopy := make([]*decoder.Entry, c.largestEntriesByCnt.Len())
+    copy(heapCopy, *c.largestEntriesByCnt)
+
+    res := make([]*decoder.Entry, 0, len(heapCopy))
+    for _, entry := range heapCopy {
+        res = append(res, entry)
+    }
+
+    // 按 NumOfElem 降序排序
+    sort.Slice(res, func(i, j int) bool {
+        return res[i].NumOfElem > res[j].NumOfElem
+    })
+
+    if topNum > 0 && topNum < len(res) {
+        res = res[:topNum]
+    }
+    return res
 }
