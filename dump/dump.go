@@ -21,7 +21,8 @@ import (
 // Dump rdb file statistical information, 此方法不再用了，因为有了输出到STDOUT 或 file
 func Dump(path string) (map[string]interface{}, error) {
 	topN := 300     // top N bigkey (按内存),最大500
-	sizeFilter := 0 // GetLargestEntries 过滤掉小于阈值的key，传0表示不过滤
+	sizeFilterMin := 0 // GetLargestEntries 过滤掉小于阈值的key，传0表示不过滤
+    numFilterMin := 0  //GetLargestEntriesByCountNumOfElem，如果元素个数小于此阈值，则被过滤，传0表示不过滤
 
 	var data map[string]interface{}
 	decoder := decoder.NewDecoder()
@@ -41,7 +42,7 @@ func Dump(path string) (map[string]interface{}, error) {
 	cnt := NewCounter(NewCounterConfig())
 	cnt.Count(decoder.Entries)
 	filename := filepath.Base(path)
-	data = GetData(filename, cnt, topN, int64(sizeFilter))
+	data = GetData(filename, cnt, topN, int64(sizeFilterMin), numFilterMin)
 	return data, nil
 }
 
@@ -52,7 +53,8 @@ func ToCliWriter(cli *cli.Context) {
 		return
 	}
 	topN := 100     // top N bigkey (按内存),最大500
-	sizeFilter := 0 // GetLargestEntries 过滤掉小于阈值的key，传0表示不过滤
+	sizeFilterMin := 0 // GetLargestEntries 过滤掉小于阈值的key，传0表示不过滤
+    numFilterMin := 0  //GetLargestEntriesByCountNumOfElem，如果元素个数小于此阈值，则被过滤，传0表示不过滤
 
 	// 1. 先创建配置对象
 	counterConfig := NewCounterConfig()
@@ -72,11 +74,11 @@ func ToCliWriter(cli *cli.Context) {
 			time.Sleep(200 * time.Millisecond) //暂停200毫秒
 		}
 	    // 2. 再给配置对象的字段赋值（即你写的第一行）
-	    counterConfig.Aux_Ctime = rdbDecoder.GetTimestamp()
+	    counterConfig.AuxCtime = rdbDecoder.GetTimestamp()
 		cnt := NewCounter(counterConfig)
 		cnt.Count(rdbDecoder.Entries)
 		filename := filepath.Base(file)
-		data := GetData(filename, cnt, topN, int64(sizeFilter))
+		data := GetData(filename, cnt, topN, int64(sizeFilterMin), numFilterMin)
 		data["MemoryUse"] = rdbDecoder.GetUsedMem()
 		data["CTime"] = rdbDecoder.GetTimestamp()
 		jsonBytes, _ := json.MarshalIndent(data, "", "    ")
@@ -97,14 +99,24 @@ func ToCliWriterToFile(cli *cli.Context) {
 		return
 	}
 
-	// top N bigkey (按内存)
+	// big key top N ，传递参数N
 	topN := cli.Int("num")
+
+	// 为了防止堆太大，因此做下限制
+	if topN > 500 {
+		fmt.Fprintln(cli.App.ErrWriter, " top n max is 500, please re-enter ")
+		return
+	}
+
 	// 将带单位的字符串转换为字节数, GetLargestEntries 过滤掉小于阈值sizeFilter的key，传0表示不过滤
-	sizeFilter, err := ParseUnitToBytes(cli.String("size"))
+	sizeFilterMin, err := ParseUnitToBytes(cli.String("size"))
 	if err != nil {
 		fmt.Println("Error:", err)
 		return
 	}
+
+    // 在获取big key top n （按元素数量）时，元素数低于该值的 Key的将被忽略
+    numFilterMin := cli.Int("NumOfElemMin")
 
 	// Separators
 	separators := cli.String("separators")
@@ -122,15 +134,15 @@ func ToCliWriterToFile(cli *cli.Context) {
 	prefixMaxCapacity := cli.Int("prefix-max-capacity")
 
 	// Counter config
-	counterConfig := &CounterConfig{
-		TopBigKeyByCountByte:    topN,
-		TopBigKeyByCountNum:     topN,
-		StoreAllPrefixes:        storeAllPrefixes,
-		Separators:              separators,
-		TopPrefixNum:            topPrefixN,
-		PrefixPreShrinkNum:      prefixShrink,
-		PrefixContainerMaxCapacity: prefixMaxCapacity,
-	}
+    // 希望使用默认参数值，因此先用 NewCounterConfig() 创建，再覆盖需要的字段
+	counterConfig := NewCounterConfig()
+	counterConfig.BigKeyByCountByteTopN = topN
+	counterConfig.BigKeyByCountNumTopN = topN
+	counterConfig.Separators = separators
+	counterConfig.StoreAllPrefixes = storeAllPrefixes
+	counterConfig.TopPrefixNum = topPrefixN
+	counterConfig.PrefixPreShrinkNum = prefixShrink
+	counterConfig.PrefixContainerMaxCapacity = prefixMaxCapacity
 
 	cst := time.FixedZone("CST", 8*60*60)
 	currentTime := time.Now().In(cst)
@@ -167,11 +179,11 @@ func ToCliWriterToFile(cli *cli.Context) {
 			}
 			time.Sleep(200 * time.Millisecond) //暂停200毫秒
 		}
-		counterConfig.Aux_Ctime=rdbDecoder.GetTimestamp()
+		counterConfig.AuxCtime=rdbDecoder.GetTimestamp()
 		cnt := NewCounter(counterConfig)
 		cnt.Count(rdbDecoder.Entries)
 		filename := filepath.Base(rdbFile)
-		data := GetData(filename, cnt, topN, sizeFilter)
+		data := GetData(filename, cnt, topN, sizeFilterMin, numFilterMin)
 		data["MemoryUse"] = rdbDecoder.GetUsedMem()
 		data["CTime"] = rdbDecoder.GetTimestamp()
 		jsonBytes, _ := json.MarshalIndent(data, "", "    ")
@@ -204,11 +216,11 @@ func Decode(c *cli.Context, decoder *decoder.Decoder, filepath string) {
 	}
 }
 
-func GetData(filename string, cnt *Counter, topN int, sizeFilter int64) map[string]interface{} {
+func GetData(filename string, cnt *Counter, topN int, sizeFilterMin int64, numFilterMin int) map[string]interface{} {
 	data := make(map[string]interface{})
 	data["CurrentInstance"] = filename
-	data["TopBigKeysByCountByte"] = cnt.GetLargestEntries(topN, sizeFilter) //top N bigkey (按内存)，sizeFilter过滤小于阈值的key
-	data["TopBigKeysByCountNum"] = cnt.GetLargestEntriesByCount(topN) //top N bigkey (按元素数量)
+	data["TopBigKeysByCountByte"] = cnt.GetLargestEntries(topN, sizeFilterMin) //top N bigkey (按内存)，sizeFilter过滤小于阈值的key
+	data["TopBigKeysByCountNum"] = cnt.GetLargestEntriesByCountNumOfElem(topN, numFilterMin) //top N bigkey (按元素数量)
 
 	largestKeyPrefixesByType := map[string][]*PrefixEntry{}
 	for _, entry := range cnt.GetLargestKeyPrefixes() {

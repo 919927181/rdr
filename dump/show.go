@@ -53,14 +53,24 @@ func Show(c *cli.Context) {
 		return
 	}
 
-	// top N bigkey (按内存)
+    // big key top N ，传递参数N
 	topN := c.Int("num")
+	// 为了防止堆太大，因此做下限制
+	if topN > 500 {
+		fmt.Fprintln(c.App.ErrWriter, " top n max is 500, please re-enter ")
+		return
+	}
+
 	// 将带单位的字符串转换为字节数, GetLargestEntries 过滤掉小于阈值sizeFilter的key，传0表示不过滤
-	sizeFilter, err := ParseUnitToBytes(c.String("size"))
+	sizeFilterMin, err := ParseUnitToBytes(c.String("size"))
 	if err != nil {
 		fmt.Println("Error:", err)
 		return
 	}
+
+    // 在获取big key top n （按元素数量）时，元素数低于该值的 Key的将被忽略
+    numFilterMin := c.Int("NumOfElemMin")
+
 	// Separators
 	separators := c.String("separators")
 
@@ -77,16 +87,15 @@ func Show(c *cli.Context) {
 	prefixMaxCapacity := c.Int("prefix-max-capacity")
 
 	// Counter config
-	counterConfig := &CounterConfig{
-		TopBigKeyByCountByte:    topN,
-		TopBigKeyByCountNum:     topN,
-		Separators:              separators,
-		StoreAllPrefixes:        storeAllPrefixes,
-		TopPrefixNum:            topPrefixN,
-		PrefixPreShrinkNum:      prefixShrink,
-		PrefixContainerMaxCapacity: prefixMaxCapacity,
-		Aux_Ctime:        0 ,
-	}
+    // 希望使用默认参数值，因此先用 NewCounterConfig() 创建，再覆盖需要的字段
+	counterConfig := NewCounterConfig()
+	counterConfig.BigKeyByCountByteTopN = topN
+	counterConfig.BigKeyByCountNumTopN = topN
+	counterConfig.Separators = separators
+	counterConfig.StoreAllPrefixes = storeAllPrefixes
+	counterConfig.TopPrefixNum = topPrefixN
+	counterConfig.PrefixPreShrinkNum = prefixShrink
+	counterConfig.PrefixContainerMaxCapacity = prefixMaxCapacity
 
 	// parse rdbfile
 	fmt.Fprintln(c.App.Writer, "start ...")
@@ -111,7 +120,7 @@ func Show(c *cli.Context) {
 							}
 							time.Sleep(200 * time.Millisecond) //暂停200毫秒
 						}
-						counterConfig.Aux_Ctime=decoder.GetTimestamp()
+						counterConfig.AuxCtime=decoder.GetTimestamp()
 						counter := NewCounter(counterConfig)
 						counter.Count(decoder.Entries)
 						counters.Set(filename, counter)
@@ -122,7 +131,8 @@ func Show(c *cli.Context) {
 						// init common data in template
 						tplCommonData["Instances"] = instances
 						tplCommonData["TopN"] = strconv.Itoa(topN)
-						tplCommonData["sizeFilter"] = strconv.FormatInt(sizeFilter, 10)
+						tplCommonData["sizeFilterMin"] = strconv.FormatInt(sizeFilterMin, 10)
+						tplCommonData["numFilterMin"] = strconv.Itoa(numFilterMin)
 					}
 				}
 

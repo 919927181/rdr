@@ -166,7 +166,8 @@ OPTIONS:
 $ GOGC=200 ./rdr-linux show -p 8099 dump.rdb
 # 从v1.1.3版本起：
   - 支持指定获取最大的 N 个键，最大500; 
-  - 支持指定内存大小过滤参数-s，用于导出大于阈值的大 key，小于阈值的key被过滤掉，单位为B/KB/MB/GB
+  - 支持指定内存大小过滤参数-s，找内存最大的key时，小于阈值的被过滤，单位为B/KB/MB/GB。
+  - 从v1.1.9支持找元素个数最多的key，阈值sn默认为3000，低于阈值的被过滤。
 $ GOGC=200 ./rdr-linux show -p 8099 -n 100 -s 10kb dump.rdb
 
 # 从v1.1.4版本起：
@@ -189,7 +190,8 @@ Note that the memory usage is approximate.
 $ GOGC=200 ./rdr-linux  dump2file  dump.rdb
 # 从v1.1.3版本起：
   - 支持指定获取最大的 N 个键，最大500; 
-  - 支持指定内存大小过滤参数-s，用于导出大于阈值的大 key，小于阈值的key被过滤掉，单位为B/KB/MB/GB
+  - 支持指定内存大小过滤参数-s，找内存最大的key时，小于阈值的被过滤，单位为B/KB/MB/GB。
+  - 从v1.1.9支持找元素个数最多的key，阈值sn默认为3000，低于阈值的被过滤。
 $ GOGC=200 ./rdr-linux  dump2file -n 100 -s 10kb  dump.rdb
 
 # 从v1.1.4版本起：

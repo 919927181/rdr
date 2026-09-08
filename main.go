@@ -62,6 +62,11 @@ func main() {
 					Value: "0kb",
 					Usage: " when GetLargestEntries, keys smaller than the threshold are filtered. supported units is B/KB/MB/GB, and can be lowercase",
 				},
+				cli.IntFlag{
+					Name:  "NumOfElemMin, sn",
+					Value: 3000,
+					Usage: " top N big keys(By Count NumOfElem), NumOfElem smaller than the threshold are filtered",
+				},
 				cli.StringFlag{
 					Name:  "separators, sep",
 					Value: ":;,_- ",
@@ -108,6 +113,11 @@ func main() {
 					Name:  "size, s",
 					Value: "0kb",
 					Usage: " when GetLargestEntries, keys smaller than the threshold are filtered. supported units is B/KB/MB/GB, and can be lowercase",
+				},
+				cli.IntFlag{
+					Name:  "NumOfElemMin, sn",
+					Value: 3000,
+					Usage: " top N big keys(By Count NumOfElem), NumOfElem smaller than the threshold are filtered",
 				},
 				cli.StringFlag{
 					Name:  "separators, sep",

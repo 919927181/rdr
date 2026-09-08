@@ -27,8 +27,16 @@ import (
 // v1.1.4 add
 const (
 
-	DefaultTopBigKeyByCountByte  = 500
-	DefaultTopBigKeyByCountNum  = 500
+	DefaultBigKeyByCountByteTopN  = 500
+	DefaultBigKeyByCountNumTopN  = 500
+
+	// 在获取big key top n 时，n最大值默认为500
+	DefaultBigKeyTopNumMax  = 500
+
+    // 在获取big key top n （按内存）时，内存低于该值（10KB）的 Key的将被忽略
+	DefaultTopBigKeyMinByteFilter = 10000
+    // 在获取big key top n （按元素数量）时，元素数低于该值的 Key的将被忽略
+	DefaultTopBigKeyMinNumOfElemFilter = 5000
 
 	DefaultSeparators = ":;,_-@# "
 	DefaultStoreAllPrefixes        = false
@@ -70,11 +78,18 @@ const (
 )
 // v1.1.4 add
 type CounterConfig struct {
+    // 在获取big key top n 时，n最大值默认为500
+	BigKeyTopNumMax int
 
-	// 按内存占用大小的Top N，默认 500
-	TopBigKeyByCountByte int
-    //v1.1.9 add,按元素个数的 Top N，默认 500
-	TopBigKeyByCountNum int
+	// 在获取top big key n （按内存）时 ，N默认 500，传参不要超过TopBigKeyNumMax
+	BigKeyByCountByteTopN int
+    //v1.1.9 add, 在获取top big key n （按元素数量）时, N默认 500，传参不要超过TopBigKeyNumMax
+	BigKeyByCountNumTopN int
+
+	// 在获取big key top n （按内存）时，内存低于该值的Key的将被忽略
+	TopBigKeyMinByteFilter int
+    // 在获取big key top n （按元素数量）时，元素数低于该值的Key的将被忽略
+	TopBigKeyMinNumOfElemFilter int
 
 	// key前缀分隔符，默认 ":;,_- "
 	Separators string
@@ -89,20 +104,23 @@ type CounterConfig struct {
 	PrefixPreShrinkNum int
 
 	// rdb的创建时间，用于过期剩余时间分析
-	Aux_Ctime int64
+	AuxCtime int64
 }
 
 // 默认配置, v1.1.4 add
 func NewCounterConfig() *CounterConfig {
 	return &CounterConfig{
-		TopBigKeyByCountByte:        DefaultTopBigKeyByCountByte,
-		TopBigKeyByCountNum:         DefaultTopBigKeyByCountNum,
+		BigKeyTopNumMax:               DefaultBigKeyTopNumMax,
+		TopBigKeyMinByteFilter:        DefaultTopBigKeyMinByteFilter,
+		TopBigKeyMinNumOfElemFilter:   DefaultTopBigKeyMinNumOfElemFilter,
+		BigKeyByCountByteTopN:        DefaultBigKeyByCountByteTopN,
+		BigKeyByCountNumTopN:         DefaultBigKeyByCountNumTopN,
 		Separators:                  DefaultSeparators,
 		StoreAllPrefixes:            DefaultStoreAllPrefixes,
 		TopPrefixNum:                DefaultTopPrefixNum,
 		PrefixContainerMaxCapacity:  DefaultPrefixContainerMaxCapacity,
 		PrefixPreShrinkNum:          DefaultPrefixPreShrinkNum,
-		Aux_Ctime:                   EDefaultAuxCtime,
+		AuxCtime:                   EDefaultAuxCtime,
 	}
 }
 
@@ -193,7 +211,7 @@ func (c *Counter) Count(in <-chan *decoder.Entry) {
 // 对传入的一个entry，执行各指标的count方法
 func (c *Counter) count(e *decoder.Entry) {
 	// 按内存占用大小的Top N
-	c.countLargestEntries(e, 500)
+	c.countLargestEntries(e, c.config.BigKeyTopNumMax)
 	// 统计各类型的key数量和内存占大小
 	c.countByType(e)
 	// 各类型按元素个数进行区间分布分析，例如hash类型:元素个数0~100的有多少个key、占用内存大小
@@ -208,7 +226,7 @@ func (c *Counter) count(e *decoder.Entry) {
 	// 按key的内存占用大小，进行区间分析，v1.1.5 add
 	c.countByByte(e)
 	// 新增统计,v1.1.9 add,按元素个数的 Top N，string类型的不参与
-    c.countLargestEntriesByCountNum(e, c.config.TopBigKeyByCountNum)
+    c.countLargestEntriesByCountNum(e, c.config.BigKeyTopNumMax)
 
 }
 
@@ -224,10 +242,9 @@ func (c *Counter) count(e *decoder.Entry) {
 // GetLargestEntries from heap, num max is 500. 过滤掉小于阈值的key
 func (c *Counter) GetLargestEntries(num int, sizeFilterMin int64) []*decoder.Entry {
 	res := []*decoder.Entry{}
-
+	entries := *c.largestEntries
 	// get a copy of c.largestEntries
 	for i := 0; i < c.largestEntries.Len(); i++ {
-		entries := *c.largestEntries
 		// 阈值默认为0，当大于0时，将过滤掉小于阈值的key
 		if sizeFilterMin > 0 {
 			if entries[i].Bytes > uint64(sizeFilterMin) {
@@ -237,6 +254,7 @@ func (c *Counter) GetLargestEntries(num int, sizeFilterMin int64) []*decoder.Ent
 			res = append(res, entries[i])
 		}
 	}
+
 	// 对切片 res 中的 *decoder.Entry 元素，按照其内存占用大小（Bytes 字段）进行原地降序排序（从大到小）
 	// Q:为什么这里必须要有这一步排序?
 	// A:虽然 Counter 内部用最小堆（largestEntries）成功保留了内存占用最大的前 N 个 Key，但堆只保证堆顶（索引 0）是最小的，堆内其余元素的顺序是无序的
@@ -246,6 +264,7 @@ func (c *Counter) GetLargestEntries(num int, sizeFilterMin int64) []*decoder.Ent
 	}
 	return res
 }
+
 
 // GetLargestKeyPrefixes from heap
 func (c *Counter) GetLargestKeyPrefixes() []*PrefixEntry {
@@ -331,7 +350,7 @@ func (c *Counter) countByExpire(e *decoder.Entry) {
     if e.Expiration >0 {
 		// rdb的创建时间，是秒间戳，key的过期时间是毫秒时间戳
 		// 转换成时间对象后，计算两个时间的差值
-		diff := time.Unix(0, e.Expiration*int64(time.Millisecond)).Sub(time.Unix(c.config.Aux_Ctime, 0))
+		diff := time.Unix(0, e.Expiration*int64(time.Millisecond)).Sub(time.Unix(c.config.AuxCtime, 0))
 		// 将差值转换为小时数
 		h := diff.Hours();
 		expireStatStr := ""
@@ -898,9 +917,8 @@ func getPrefixes(s, sep string) []string {
 			res[i] = res[i][:len(res[i])-1]
 		}
 	}
-	// ⭐ 可以移除去重调用，直接返回（重复项由外部 map 去重）
-    // 之前：res = removeDuplicatesUnordered(res)
-	// res = removeDuplicatesUnordered(res)
+	// ⭐ 需要保留此处的去重调用，因为外部的map只能跨 key 去重，无法对单个 key 内的重复前缀去重
+    res = removeDuplicatesUnordered(res)
 	return res
 }
 
@@ -934,9 +952,9 @@ func getPrefixes2(s, sep string) []string {
 			res[i] = res[i][:len(res[i])-1]
 		}
 	}
-	// ⭐ 可以移除去重调用，直接返回（重复项由外部 map 去重）
-	// 之前：res = removeDuplicatesUnordered(res)
-	// res = removeDuplicatesUnordered(res)
+
+	// ⭐ 需要保留此处的去重调用，因为外部的map只能跨 key 去重，无法对单个 key 内的重复前缀去重
+    res = removeDuplicatesUnordered(res)
 	return res
 }
 
@@ -1000,7 +1018,7 @@ func (h *entryHeapByCountNum) Pop() interface{} {
 
 // 新增统计,v1.1.9 add,按元素个数的 Top N，string类型的不参与，元素数量低于5千的忽略
 func (c *Counter) countLargestEntriesByCountNum(e *decoder.Entry, topNum int) {
-    if topNum <= 0 || e.Type == "string" || e.NumOfElem < 5000 {
+    if topNum <= 0 || e.Type == "string" {
         return // 如果配置为 0，则不统计
     }
     heap.Push(c.largestEntriesByCnt, e)
@@ -1009,14 +1027,19 @@ func (c *Counter) countLargestEntriesByCountNum(e *decoder.Entry, topNum int) {
     }
 }
 
-// GetLargestEntriesByCount 返回按元素个数（NumOfElem）降序的前 num 个 Key
-func (c *Counter) GetLargestEntriesByCount(topNum int) []*decoder.Entry {
+// GetLargestEntriesByCountNumOfElem 返回按元素个数（NumOfElem）降序的前 num 个 Key
+func (c *Counter) GetLargestEntriesByCountNumOfElem(topNum int, numFilterMin int) []*decoder.Entry {
     // 复制堆快照（避免并发问题）
     heapCopy := make([]*decoder.Entry, c.largestEntriesByCnt.Len())
     copy(heapCopy, *c.largestEntriesByCnt)
 
     res := make([]*decoder.Entry, 0, len(heapCopy))
     for _, entry := range heapCopy {
+
+       // 阈值默认为0，当大于0时，将过滤掉小于等于阈值的key
+        if numFilterMin > 0 && entry.NumOfElem <= uint64(numFilterMin) {
+            continue
+        }
         res = append(res, entry)
     }
 
